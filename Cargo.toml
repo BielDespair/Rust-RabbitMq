@@ -1,0 +1,13 @@
+[package]
+name = "rust-stream"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+amqp_serde = "0.4.2"
+amqprs = "2.1.2"
+dotenv = "0.15.0"
+log = "0.4.28"
+simplelog = "0.12.2"
+time = "0.3.43"
+tokio = "1.47.1"
