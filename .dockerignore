@@ -1,0 +1,22 @@
+# Ignorar pastas de build locais
+target
+**/target
+
+data/**
+
+# Ignorar arquivos de logs
+*.log
+
+# Ignorar arquivos temporários do sistema
+*.tmp
+*.swp
+*.DS_Store
+*.idea
+*.vscode
+
+# Ignorar arquivos de configuração local
+.env
+.env.local
+
+# Ignorar caches do cargo
+#**/Cargo.lock

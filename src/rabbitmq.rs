@@ -153,7 +153,7 @@ pub async fn initialize_channels(
 
 pub async fn publish(content: &String, channel: &mut Channel, exchange_name: &String, routing_key: &String) -> bool {
     
-    let args = channel::BasicPublishArguments::new("", routing_key);
+    let args = channel::BasicPublishArguments::new(exchange_name, routing_key);
 
     let result = channel.basic_publish(BasicProperties::default(), content.as_bytes().to_vec(), args).await;
 

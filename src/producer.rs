@@ -16,7 +16,7 @@ async fn main() {
     logger::register_logger();
 
     let rabbit_variables = rabbitmq::initialize_rabbit_variables();
-    let mut connection = rabbitmq::connect_rabbitmq(&rabbit_variables).await;
+    let mut connection: Connection = rabbitmq::connect_rabbitmq(&rabbit_variables).await;
     let mut channels: Vec<Channel> = Vec::new();
     rabbitmq::initialize_channels(&rabbit_variables, &connection, &mut channels).await;
 
