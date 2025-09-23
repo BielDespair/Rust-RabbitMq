@@ -1,19 +1,10 @@
-use std::{env, process::exit};
-use dotenv::dotenv;
-use std::path::PathBuf;
+
+use std::{env, path::PathBuf, process::exit};
+
 use log::LevelFilter;
 use simplelog::{format_description, ColorChoice, ConfigBuilder, TermLogger, TerminalMode, WriteLogger};
 
-use crate::rabbitmq::{RabbitVariables};
-
-mod rabbitmq;
-
-
-#[tokio::main]
-async fn main() {
-
-    dotenv().ok();
-
+pub fn register_logger() {
     let path_res = env::current_exe();
     let mut path_full = match path_res {
         Ok(r) => r,
@@ -45,9 +36,4 @@ async fn main() {
             panic!("Could not start logger service: {e}");
         }
     }
-    println!("The host is: {}", env::var("HOST").expect(&env_not_present("HOST")));
-    
-
 }
-
-

@@ -1,8 +1,11 @@
+use amqprs::{ callbacks, channel::{self, Channel}, connection::{self, Connection}, BasicProperties, Deliver };
 use std::env;
-use amqprs::{callbacks, connection};
-use time::Duration;
 use tokio::time::sleep;
 
+
+
+
+#[derive(Clone)]
 pub struct RabbitVariables {
     pub host: String,
     pub port: u16,
@@ -11,8 +14,17 @@ pub struct RabbitVariables {
     pub queue_name: String,
     pub num_channels: u8,
     pub routing_key: String,
-    pub exchange_name: String
+    pub exchange_name: String,
+    pub consumer: String,
 }
+
+#[derive(serde::Serialize, Clone)]
+pub struct Message {
+    pub id: String,
+    pub body: String,
+}
+
+
 
 #[inline]
 fn env_not_present(var_name: &str) -> String {
@@ -20,33 +32,16 @@ fn env_not_present(var_name: &str) -> String {
 }
 
 pub fn initialize_rabbit_variables() -> RabbitVariables {
-    let host = env::var("RABBITMQ_SERVICE_HOST")
-        .expect(&env_not_present("RABBITMQ_SERVICE_HOST"));
-
-    let port: u16 = env::var("RABBITMQ_SERVICE_PORT")
-        .expect(&env_not_present("RABBITMQ_SERVICE_PORT"))
-        .parse()
-        .expect(&env_not_present("RABBITMQ_SERVICE_PORT"));
-
-    let username = env::var("RABBITMQ_SERVICE_USERNAME")
-        .expect(&env_not_present("RABBITMQ_SERVICE_USERNAME"));
-
-    let password = env::var("RABBITMQ_SERVICE_PASSWORD")
-        .expect(&env_not_present("RABBITMQ_SERVICE_PASSWORD"));
-
-    let queue_name = env::var("RABBITMQ_SERVICE_QUEUE_NAME")
-        .expect(&env_not_present("RABBITMQ_SERVICE_QUEUE_NAME"));
-
-    let num_channels: u8 = env::var("RABBITMQ_SERVICE_NUM_CHANNELS")
-        .expect(&env_not_present("RABBITMQ_SERVICE_NUM_CHANNELS"))
-        .parse()
-        .expect(&env_not_present("RABBITMQ_SERVICE_NUM_CHANNELS"));
-
-    let routing_key = env::var("RABBITMQ_SERVICE_ROUTING_KEY")
-        .expect(&env_not_present("RABBITMQ_SERVICE_ROUTING_KEY"));
-
-    let exchange_name = env::var("RABBITMQ_SERVICE_EXCHANGE")
-        .expect(&env_not_present("RABBITMQ_SERVICE_EXCHANGE"));
+    
+    let host = env::var("RABBIT_HOST").expect(&env_not_present("RABBIT_HOST"));
+    let port: u16 = env::var("RABBIT_PORT").unwrap().parse().unwrap();
+    let username = env::var("RABBIT_USER").expect(&env_not_present("RABBIT_USER"));
+    let password = env::var("RABBIT_PASS").expect(&env_not_present("RABBIT_PASS"));
+    let queue_name = env::var("RABBIT_QUEUE").expect(&env_not_present("RABBIT_QUEUE"));
+    let num_channels: u8 = env::var("RABBIT_NUM_CHANNELS").unwrap().parse().unwrap();
+    let routing_key = env::var("RABBIT_ROUTING_KEY").expect(&env_not_present("RABBIT_ROUTING_KEY"));
+    let exchange_name = env::var("RABBIT_EXCHANGE").expect(&env_not_present("RABBIT_EXCHANGE"));
+    let consumer = env::var("RABBIT_CONSUMER").expect(&env_not_present("RABBIT_CONSUMER"));
 
     RabbitVariables {
         host,
@@ -57,14 +52,11 @@ pub fn initialize_rabbit_variables() -> RabbitVariables {
         num_channels,
         routing_key,
         exchange_name,
+        consumer
     }
 }
 
-
-async fn connect_rabbitmq(
-    rabbit_variables: &RabbitVariables,
-) -> connection::Connection {
-
+pub async fn connect_rabbitmq(rabbit_variables: &RabbitVariables) -> connection::Connection {
     let connection;
     loop {
         let result_connection =
@@ -85,7 +77,7 @@ async fn connect_rabbitmq(
                     "Could not connect to rabbitmq, {}, trying again in 5 second",
                     e
                 );
-                sleep(std::time::Duration::from_secs(5));
+                sleep(std::time::Duration::from_secs(5)).await;
             }
         }
     }
@@ -100,4 +92,76 @@ async fn connect_rabbitmq(
     };
 
     connection
+}
+
+pub async fn initialize_channels(
+    rabbit_variables: &RabbitVariables,
+    connection: &Connection,
+    channels: &mut Vec<Channel>,
+) -> () {
+    channels.clear();
+    for _ in 0..rabbit_variables.num_channels {
+        let channel = match connection.open_channel(None).await {
+            Ok(r) => r,
+            Err(e) => {
+                log::error!("Could not open channel to RabbitMQ: {e}");
+                return;
+            }
+        };
+
+        match channel
+            .register_callback(callbacks::DefaultChannelCallback)
+            .await
+        {
+            Ok(_) => (),
+            Err(e) => log::error!("Could not register channel callback: {e}"),
+        }
+
+        match channel
+            .queue_declare(channel::QueueDeclareArguments::durable_client_named(
+                &rabbit_variables.queue_name,
+            ))
+            .await
+        {
+            Ok(_) => (),
+            Err(e) => {
+                log::error!("Could not declare queue: {e}");
+                return;
+            }
+        }
+
+        if !rabbit_variables.exchange_name.is_empty() {
+            match channel
+                .queue_bind(channel::QueueBindArguments::new(
+                    &rabbit_variables.queue_name,
+                    &rabbit_variables.exchange_name,
+                    &rabbit_variables.routing_key,
+                ))
+                .await
+            {
+                Ok(_) => (),
+                Err(e) => {
+                    log::error!("Could not bind queue: {e}");
+                    return;
+                }
+            }
+        }
+        channels.push(channel);
+    }
+}
+
+
+pub async fn publish(content: &String, channel: &mut Channel, exchange_name: &String, routing_key: &String) -> bool {
+    
+    let args = channel::BasicPublishArguments::new("", routing_key);
+
+    let result = channel.basic_publish(BasicProperties::default(), content.as_bytes().to_vec(), args).await;
+
+    match result {
+        Ok(_) => {return true;}
+        Err(e) => {
+            log::error!("Could not publish message: {e}");
+            return  false;
+        }
+    }
 }
