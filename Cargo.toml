@@ -25,3 +25,7 @@ path = "src/consumer.rs"
 [[bin]]
 name = "producer"
 path = "src/producer.rs"
+
+[[bin]]
+name = "parser"
+path = "src/parser.rs"
