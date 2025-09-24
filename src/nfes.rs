@@ -1,3 +1,4 @@
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Default)]
 pub struct NFe {
@@ -65,7 +66,7 @@ pub struct EnderEmit {
     pub fone: Option<String>
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum NFRef {
     refNFe { chave: String },
     refNFeSig { chave: String },
@@ -80,9 +81,8 @@ pub enum NFRef {
     refNFP {
         cUF: u8,
         AAMM: String,
+        #[serde(flatten)]
         id: EmitenteId,
-         
-
     }
 }
 
@@ -100,7 +100,7 @@ pub enum UF {
     RO, RR, RS, SC, SE, SP, TO,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 enum EmitenteId {
     CNPJ {CNPJ: String},
     CPF {CPF: String}
