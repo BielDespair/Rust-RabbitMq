@@ -1,12 +1,15 @@
 use std::fs;
-use quick_xml::Reader;
+use quick_xml::{reader, Reader};
 use quick_xml::events::Event;
 
+use crate::nfes::NFe;
+
 mod logger;
+mod nfes;
 
 fn main() {
     logger::register_logger();
-    let file:Vec<u8>  = read_file_bytes("./data/Mod65.xml").unwrap();
+    let file:Vec<u8>  = fs::read("./data/Mod65.xml").unwrap();
 
     let modelo: ModNfe = get_mod_nfe(&file);
 
@@ -25,11 +28,57 @@ fn main() {
      */
 }
 
+pub fn parse_nfe(xml_bytes: &[u8]){
+
+    let modelo: ModNfe = get_mod_nfe(&xml_bytes);
+    let mut buf: Vec<u8> = Vec::new();
+
+    match modelo {
+        ModNfe::Mod55 => parse_nfe_mod_55(&xml_bytes),
+        ModNfe::Mod57 => todo!(),
+        ModNfe::Mod65 => todo!(),
+        ModNfe::Desconhecido => todo!(),
+    }
+    parse_nfe_mod_55(&xml_bytes);
+}
 
 
-// Lê um arquivo e devolve um vector de bytes.
-fn read_file_bytes(path: &str) -> std::io::Result<Vec<u8>> {
-    return fs::read(path);
+pub fn parse_nfe_mod_55(xml_bytes: &[u8]) {
+
+}
+
+pub fn parse_nfe_mod_57() {
+
+}
+
+pub fn parse_nfe_mod_65(xml_bytes: &[u8]) {
+    let mut reader: Reader<&[u8] = Reader::from_reader(xml_bytes);
+    reader.config_mut().trim_text(true);
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+
+                // match ... ide, emit...
+                // 
+            }
+
+            Ok(Event::Text(e)) => {
+                let bytes: &[u8] = e.as_ref();
+                let txt: &str = str::from_utf8(bytes).unwrap();
+                println!("Conteúdo: {:p}", txt.as_ptr());
+                println!("Fatia ref: {:p}", &txt);
+            }
+
+            Ok(Event::Eof) => { break; }
+
+            Err(e) => { break; }
+
+            _ => {}
+
+        }
+
+    }
 }
 
 
@@ -69,4 +118,11 @@ pub enum ModNfe {
     Desconhecido
 }
 
+
+pub struct XmlJson<T> {
+    company_id: i128,
+    org_id: i128,
+
+    nfes: Vec<T>
+}
 
