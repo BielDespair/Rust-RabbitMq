@@ -3,8 +3,9 @@ use amqprs::{
     channel::{self, Channel},
     connection::{self, Connection},
 };
-use std::env;
+use std::{env, sync::Arc};
 use tokio::time::sleep;
+
 
 #[derive(Clone)]
 pub struct RabbitVariables {
@@ -30,31 +31,26 @@ fn env_not_present(var_name: &str) -> String {
     return format!("Enviroment variable '{}' not set", var_name);
 }
 
-pub fn initialize_rabbit_variables() -> RabbitVariables {
-    let host = env::var("RABBIT_HOST").expect(&env_not_present("RABBIT_HOST"));
-    let port: u16 = env::var("RABBIT_PORT").unwrap().parse().unwrap();
-    let username = env::var("RABBIT_USER").expect(&env_not_present("RABBIT_USER"));
-    let password = env::var("RABBIT_PASS").expect(&env_not_present("RABBIT_PASS"));
-    let queue_name = env::var("RABBIT_QUEUE").expect(&env_not_present("RABBIT_QUEUE"));
-    let num_channels: u8 = env::var("RABBIT_NUM_CHANNELS").unwrap().parse().unwrap();
-    let routing_key = env::var("RABBIT_ROUTING_KEY").expect(&env_not_present("RABBIT_ROUTING_KEY"));
-    let exchange_name = env::var("RABBIT_EXCHANGE").expect(&env_not_present("RABBIT_EXCHANGE"));
-    let consumer = env::var("RABBIT_CONSUMER").expect(&env_not_present("RABBIT_CONSUMER"));
+pub fn initialize_variables(prefix: &str) -> RabbitVariables {
+    let get = |key: &str| {
+        let full = format!("{}_{}", prefix, key);
+        env::var(&full).expect(&env_not_present(&full))
+    };
 
     RabbitVariables {
-        host,
-        port,
-        username,
-        password,
-        queue_name,
-        num_channels,
-        routing_key,
-        exchange_name,
-        consumer,
+        host: get("HOST"),
+        port: get("PORT").parse().unwrap(),
+        username: get("USER"),
+        password: get("PASS"),
+        queue_name: get("QUEUE"),
+        num_channels: get("NUM_CHANNELS").parse().unwrap(),
+        routing_key: get("ROUTING_KEY"),
+        exchange_name: get("EXCHANGE"),
+        consumer: get("CONSUMER"),
     }
 }
 
-pub async fn connect_rabbitmq(rabbit_variables: &RabbitVariables) -> connection::Connection {
+pub async fn connect_rabbitmq(rabbit_variables: &RabbitVariables) -> Arc<connection::Connection> {
     let connection;
     loop {
         let result_connection =
@@ -68,6 +64,7 @@ pub async fn connect_rabbitmq(rabbit_variables: &RabbitVariables) -> connection:
         match result_connection {
             Ok(c) => {
                 connection = c;
+                log::info!("Successfully connected to RabbitMQ!");
                 break;
             }
             Err(e) => {
@@ -89,7 +86,7 @@ pub async fn connect_rabbitmq(rabbit_variables: &RabbitVariables) -> connection:
         }
     };
 
-    connection
+    return Arc::new(connection);
 }
 
 pub async fn initialize_channels(
@@ -149,8 +146,8 @@ pub async fn initialize_channels(
 }
 
 pub async fn publish(
-    content: &String,
-    channel: &mut Channel,
+    content: String,
+    channel: Channel,
     exchange_name: &String,
     routing_key: &String,
 ) -> bool {

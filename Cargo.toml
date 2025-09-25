@@ -20,8 +20,8 @@ time = "0.3.43"
 tokio = "1.47.1"
 
 [[bin]]
-name = "consumer"
-path = "src/consumer.rs"
+name = "main"
+path = "src/main.rs"
 
 [[bin]]
 name = "producer"

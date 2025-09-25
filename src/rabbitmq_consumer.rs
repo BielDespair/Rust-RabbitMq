@@ -1,38 +1,44 @@
+use std::{sync::{atomic::AtomicUsize, Arc}, thread::{self, ThreadId}};
+
 use amqprs::{
     BasicProperties, Deliver,
-    callbacks::{DefaultChannelCallback, DefaultConnectionCallback},
     channel::{
-        BasicAckArguments, BasicConsumeArguments, Channel, QueueBindArguments,
-        QueueDeclareArguments,
+        BasicAckArguments, BasicConsumeArguments, Channel,
     },
     connection::{Connection, OpenConnectionArguments},
     consumer::AsyncConsumer,
 };
 use async_trait::async_trait;
-use tokio::time::{self, sleep};
+use tokio::{sync::Mutex, time::{self, sleep}};
 
-use crate::rabbitmq::{self, RabbitVariables};
+use crate::{rabbitmq::{self, RabbitVariables}, rabbitmq_producer::RabbitMqProducer};
 
 pub struct XmlConsumer {
     manual_ack: bool,
+    producer_channels: Arc<Mutex<Vec<Channel>>>,
+    exchange_name: String,
+    routing_key: String,
+    total_consumed: Arc<AtomicUsize>,
 }
 
 pub struct RabbitMqConsumer {
     rabbit_variables: RabbitVariables,
-    connection: Connection,
-    channels: Vec<Channel>,
+    connection: Arc<Connection>,
+    consumer_channels: Vec<Channel>,
+    producer_channels: Arc<Mutex<Vec<Channel>>>,
+    total_consumed: Arc<AtomicUsize>,
 }
 
 impl RabbitMqConsumer {
-    pub async fn new(rabbit_variables: RabbitVariables) -> Self {
-        let conn: Connection;
-        let channels: Vec<Channel> = Vec::new();
+    pub async fn new(rabbit_variables: RabbitVariables, connection: Arc<Connection>) -> Self {
 
-        conn = rabbitmq::connect_rabbitmq(&rabbit_variables).await;
+        let counter = Arc::new(AtomicUsize::new(0));
         Self {
             rabbit_variables: rabbit_variables,
-            connection: conn,
-            channels,
+            connection: connection,
+            consumer_channels: Vec::new(),
+            producer_channels: Arc::new(Mutex::new(Vec::new())),
+            total_consumed: counter
         }
     }
 
@@ -41,32 +47,34 @@ impl RabbitMqConsumer {
             self.initialize_channels().await;
             self.register_consuming_channels().await;
         }
-
-        loop {
-            if !self.connection.is_open() {
-                log::error!("RabbitMQ Connection was closed");
-                self.connection = rabbitmq::connect_rabbitmq(&self.rabbit_variables).await;
-                self.initialize_channels().await;
-                self.register_consuming_channels().await;
-            }
-            sleep(time::Duration::from_millis(1)).await;
-        }
     }
 
     async fn initialize_channels(&mut self) {
-        rabbitmq::initialize_channels(&self.rabbit_variables, &self.connection, &mut self.channels)
+        rabbitmq::initialize_channels(&self.rabbit_variables, &self.connection, &mut self.consumer_channels)
             .await;
+
+        let mut producer_channels = self.producer_channels.lock().await;
+        rabbitmq::initialize_channels(&self.rabbit_variables, &self.connection, &mut producer_channels).await;
+
     }
 
     async fn register_consuming_channels(&self) {
-        for channel in self.channels.iter() {
+        for channel in self.consumer_channels.iter() {
             // Consumer tag deve vir de rabbit variables.
             let args: BasicConsumeArguments =
                 BasicConsumeArguments::new(&self.rabbit_variables.queue_name, "parser-xml")
                     .manual_ack(true)
                     .finish();
 
-            let consume: XmlConsumer = XmlConsumer { manual_ack: true };
+            let counter = self.total_consumed.clone();
+            let producer_channels: Arc<Mutex<Vec<Channel>>> = self.producer_channels.clone();
+            let consume: XmlConsumer = XmlConsumer { 
+                manual_ack: true,
+                total_consumed: counter,
+                producer_channels,
+                exchange_name: self.rabbit_variables.exchange_name.clone(),
+                routing_key: self.rabbit_variables.routing_key.clone()
+            };
             let tag = channel.basic_consume(consume, args).await;
 
             match tag {
@@ -75,8 +83,35 @@ impl RabbitMqConsumer {
             }
         }
     }
+    pub async fn get_publisher_channel(&self)-> Option<Channel> {
+        let mut channels = self.producer_channels.lock().await;
+        channels.iter_mut().find(|ch| ch.is_open()).cloned()
+    }
+
+    pub async fn reset_connection(&mut self, conn:Arc<Connection>) {
+        self.connection = conn;
+        self.consumer_channels.clear();
+        self.producer_channels.lock().await.clear();
+    }
+
 }
 
+impl XmlConsumer {
+    async fn publish (&self) -> bool {
+        
+        let channel = self.get_publisher_channel().await.expect("Failed to get publishing channel");
+        let json: String = "{\"body\": \"Hello, World!\"}".to_string();
+        
+        rabbitmq::publish(json, channel, &self.exchange_name, &self.routing_key).await;
+        log::info!("Successfully published!");
+        return true;
+    }
+
+    async fn get_publisher_channel(&self)-> Option<Channel> {
+        let mut channels = self.producer_channels.lock().await;
+        channels.iter_mut().find(|ch| ch.is_open()).cloned()
+    }
+}
 #[async_trait]
 impl AsyncConsumer for XmlConsumer {
     async fn consume(
@@ -94,7 +129,15 @@ impl AsyncConsumer for XmlConsumer {
             }
         };
 
-        log::info!("Consuming message: {}", returned_string);
+        self.total_consumed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+
+        let current_thread: ThreadId = thread::current().id();
+        log::info!("Consuming message: {} on thread {:?}", self.total_consumed.load(std::sync::atomic::Ordering::SeqCst), current_thread);
+
+        self.publish();
+        
+
 
         let args = BasicAckArguments::new(deliver.delivery_tag(), false);
         match channel.basic_ack(args).await {
