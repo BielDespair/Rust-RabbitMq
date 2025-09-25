@@ -1,9 +1,8 @@
 use std::sync::{Arc};
 
 use amqprs::connection::Connection;
-use dotenv::dotenv;
 use tokio::sync::Mutex;
-
+use dotenv::dotenv;
 use crate::{rabbitmq::RabbitVariables, rabbitmq_consumer::RabbitMqConsumer, rabbitmq_producer::RabbitMqProducer};
 
 mod logger;
@@ -24,6 +23,7 @@ async fn main() {
 
     // Initial connection
     let mut connection: Arc<Connection> = rabbitmq::connect_rabbitmq(&producer_variables).await;
+    
     
     let mut consumer: RabbitMqConsumer = RabbitMqConsumer::new(consumer_variables, connection.clone()).await;
 

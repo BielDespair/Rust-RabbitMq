@@ -13,6 +13,8 @@ use tokio::{sync::Mutex, time::{self, sleep}};
 
 use crate::{rabbitmq::{self, RabbitVariables}, rabbitmq_producer::RabbitMqProducer};
 
+
+
 pub struct XmlConsumer {
     manual_ack: bool,
     producer_channels: Arc<Mutex<Vec<Channel>>>,
@@ -83,10 +85,6 @@ impl RabbitMqConsumer {
             }
         }
     }
-    pub async fn get_publisher_channel(&self)-> Option<Channel> {
-        let mut channels = self.producer_channels.lock().await;
-        channels.iter_mut().find(|ch| ch.is_open()).cloned()
-    }
 
     pub async fn reset_connection(&mut self, conn:Arc<Connection>) {
         self.connection = conn;
@@ -97,19 +95,29 @@ impl RabbitMqConsumer {
 }
 
 impl XmlConsumer {
-    async fn publish (&self) -> bool {
+    async fn publish (&self, message: usize ) -> bool {
         
-        let channel = self.get_publisher_channel().await.expect("Failed to get publishing channel");
+        let channel = match self.get_publisher_channel().await {
+            Some(ch) => ch,
+            None => return false,
+        };
+
         let json: String = "{\"body\": \"Hello, World!\"}".to_string();
         
         rabbitmq::publish(json, channel, &self.exchange_name, &self.routing_key).await;
-        log::info!("Successfully published!");
+        log::info!("Successfully published message{message}");
         return true;
     }
 
-    async fn get_publisher_channel(&self)-> Option<Channel> {
-        let mut channels = self.producer_channels.lock().await;
-        channels.iter_mut().find(|ch| ch.is_open()).cloned()
+    async fn get_publisher_channel(&self) -> Option<Channel> {
+        loop {
+            let mut channels = self.producer_channels.lock().await;
+            if let Some(ch) = channels.iter_mut().find(|ch| ch.is_open()).cloned() {
+                return Some(ch);
+            }
+            drop(channels); // libera o lock
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
     }
 }
 #[async_trait]
@@ -131,11 +139,11 @@ impl AsyncConsumer for XmlConsumer {
 
         self.total_consumed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-
+        let total: usize = self.total_consumed.load(std::sync::atomic::Ordering::SeqCst);
         let current_thread: ThreadId = thread::current().id();
-        log::info!("Consuming message: {} on thread {:?}", self.total_consumed.load(std::sync::atomic::Ordering::SeqCst), current_thread);
+        log::info!("Consuming message: {} on thread {:?}", total, current_thread);
 
-        self.publish();
+        self.publish(total).await;
         
 
 
