@@ -1,48 +1,60 @@
-use amqprs::{channel::{self, Channel}, consumer::{self, AsyncConsumer}, BasicProperties, Deliver};
+use amqprs::{
+    BasicProperties, Deliver,
+    channel::{self, Channel},
+    consumer::{self, AsyncConsumer},
+};
 use async_trait::async_trait;
 
 use crate::rabbitmq::{self, Message};
 
-pub type ConsumerFunction = fn(
-    &Channel,
-    &Deliver,
-    BasicProperties,
-    &[u8],
-    &Message
-) -> bool;
+pub type ConsumerFunction = fn(&Channel, &Deliver, BasicProperties, &[u8], &Message) -> bool;
 
 pub struct QueueConsumer {
     manual_ack: bool,
     consume_fn: ConsumerFunction,
-    message: Message
+    message: Message,
 }
 
-pub async fn register_consuming_channels(consume_fn: ConsumerFunction, queue_name: &str, channels: &mut [channel::Channel], queue_message: Message) {
+pub async fn register_consuming_channels(
+    consume_fn: ConsumerFunction,
+    queue_name: &str,
+    channels: &mut [channel::Channel],
+    queue_message: Message,
+) {
     for channel in channels.iter() {
         // Consumer tag deve vir de rabbit variables.
         let args = channel::BasicConsumeArguments::new(queue_name, "parser-xml")
             .manual_ack(true)
             .finish();
-        let consume = QueueConsumer{manual_ack: true, consume_fn, message:queue_message.clone()};
+        let consume = QueueConsumer {
+            manual_ack: true,
+            consume_fn,
+            message: queue_message.clone(),
+        };
         let tag = channel.basic_consume(consume, args).await;
 
         match tag {
             Ok(content) => log::info!("Consumer connected with tag {}", content),
-            Err(e) => log::info!("Failed to connect consumer: {}", e)
+            Err(e) => log::info!("Failed to connect consumer: {}", e),
         }
     }
 }
 
-
 #[async_trait]
 impl AsyncConsumer for QueueConsumer {
-    async fn consume(&mut self, channel: &Channel, deliver: Deliver, _basic_properties: BasicProperties, content: Vec<u8>) {        
-        let shall_continue = (self.consume_fn) (
+    async fn consume(
+        &mut self,
+        channel: &Channel,
+        deliver: Deliver,
+        _basic_properties: BasicProperties,
+        content: Vec<u8>,
+    ) {
+        let shall_continue = (self.consume_fn)(
             channel,
             &deliver,
             _basic_properties,
             &content,
-            &self.message
+            &self.message,
         );
 
         if shall_continue && self.manual_ack {
@@ -65,9 +77,8 @@ pub fn queue_consume_function(
     _deliver: &Deliver,
     _basic_properties: BasicProperties,
     content: &[u8],
-    queue_message: &Message // Pode ser o MinIO/A fila novamente
+    queue_message: &Message, // Pode ser o MinIO/A fila novamente
 ) -> bool {
-
     let returned_string = match std::str::from_utf8(content) {
         Ok(r) => r,
         Err(e) => {

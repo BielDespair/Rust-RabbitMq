@@ -1,9 +1,19 @@
-use std::{process::exit, sync::{atomic::{AtomicI32, Ordering}, Arc}, time::Duration};
 use amqprs::{self, channel::Channel, connection::Connection};
 use dotenv::dotenv;
+use std::{
+    process::exit,
+    sync::{
+        Arc,
+        atomic::{AtomicI32, Ordering},
+    },
+    time::Duration,
+};
 
 use ::futures::future::join_all;
-use tokio::{task::futures, time::{self, sleep}};
+use tokio::{
+    task::futures,
+    time::{self, sleep},
+};
 
 use crate::rabbitmq::{Message, RabbitVariables};
 
@@ -36,12 +46,13 @@ async fn main() {
 
     // espera todas as tasks (no caso, rodarão indefinidamente)
     join_all(tasks).await;
-
-    
 }
 
-
-async fn run_publisher(mut channel: Channel, rabbit_variables: RabbitVariables, counter: Arc<AtomicI32>) {
+async fn run_publisher(
+    mut channel: Channel,
+    rabbit_variables: RabbitVariables,
+    counter: Arc<AtomicI32>,
+) {
     loop {
         let id = counter.fetch_add(1, Ordering::SeqCst); // incrementa e pega valor anterior
         let message = Message {
@@ -50,7 +61,13 @@ async fn run_publisher(mut channel: Channel, rabbit_variables: RabbitVariables, 
         };
         let json = serde_json::to_string(&message).unwrap();
 
-        let _ = rabbitmq::publish(&json, &mut channel, &rabbit_variables.exchange_name, &rabbit_variables.routing_key).await;
+        let _ = rabbitmq::publish(
+            &json,
+            &mut channel,
+            &rabbit_variables.exchange_name,
+            &rabbit_variables.routing_key,
+        )
+        .await;
         log::info!("Published message n° {}", id);
         sleep(Duration::from_millis(1)).await;
 

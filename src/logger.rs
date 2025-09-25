@@ -1,8 +1,9 @@
-
 use std::{env, path::PathBuf, process::exit};
 
 use log::LevelFilter;
-use simplelog::{format_description, ColorChoice, ConfigBuilder, TermLogger, TerminalMode, WriteLogger};
+use simplelog::{
+    ColorChoice, ConfigBuilder, TermLogger, TerminalMode, WriteLogger, format_description,
+};
 
 pub fn register_logger() {
     let path_res = env::current_exe();
@@ -20,14 +21,26 @@ pub fn register_logger() {
     let log_res: Result<(), log::SetLoggerError> = simplelog::CombinedLogger::init(vec![
         TermLogger::new(
             LevelFilter::Info,
-            ConfigBuilder::new().set_time_format_custom(format_description!("[year]-[month]-[day] [hour]:[minute]:[second] +[offset_hour]")).build(),
+            ConfigBuilder::new()
+                .set_time_format_custom(format_description!(
+                    "[year]-[month]-[day] [hour]:[minute]:[second] +[offset_hour]"
+                ))
+                .build(),
             TerminalMode::Mixed,
-            ColorChoice::Auto
+            ColorChoice::Auto,
         ),
         WriteLogger::new(
-        LevelFilter::Warn,
-        ConfigBuilder::new().set_time_format_custom(format_description!("[year]-[month]-[day] [hour]:[minute]:[second] +[offset_hour]")).build(),
-        std::fs::OpenOptions::new().create(true).append(true).open(path_error).unwrap(),
+            LevelFilter::Warn,
+            ConfigBuilder::new()
+                .set_time_format_custom(format_description!(
+                    "[year]-[month]-[day] [hour]:[minute]:[second] +[offset_hour]"
+                ))
+                .build(),
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path_error)
+                .unwrap(),
         ),
     ]);
     match log_res {

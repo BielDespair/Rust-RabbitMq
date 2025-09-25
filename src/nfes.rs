@@ -1,14 +1,39 @@
+use rust_decimal::Decimal;
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Clone)]
 pub struct NFe {
-    ide: Ide,
-    emit: Emit,
-    produtos: Option<>
+    pub ide: Ide,
+    pub emit: Emit,
+    pub avulsa: Option<Avulsa>,
+    pub dest: Option<Dest>,
+    pub retirada: Option<Local>,
+    pub entrega: Option<Local>, 
+    pub autXML: Option<Vec<EmitenteId>>,
+    //produtos: Vec<Prod>,
+
 }
 
+pub struct Prod {
+    pub nItem: u32,
+    pub cProd: String,
+    pub cEAN: Option<String>,
+    pub xProd: String,
+    pub NCM: String,
+    pub CFOP: String,
+    pub uCom: String,
+    pub qCom: f64,
+    pub vUnCom: f64,
+    pub vProd: f64,
+    pub cEANTrib: Option<String>,
+    pub uTrib: String,
+    pub qTrib: f64,
+    pub vUnTrib: f64,
+    pub indTot: u8,
+    // More fields can be added as needed
+}
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Clone)]
 pub struct Ide {
     pub cUF: u8,
     pub cNF: String,
@@ -18,7 +43,7 @@ pub struct Ide {
     pub nNF: u32,
     pub dhEmi: String,
     pub dhSaiEnt: Option<String>,
-    pub tpNF: u8,
+    pub tpNF: bool,
     pub idDest: u8,
     pub cMunFG: u32,
     pub cMunFGIBS: Option<u32>,
@@ -36,23 +61,60 @@ pub struct Ide {
     pub verProc: String,
     pub dhCont: Option<String>,
     pub xJust: Option<String>,
-    pub NFref: Option<Vec<NFRef>>
+    pub NFref: Option<Vec<NFRef>>,
+    pub gCompraGov: Option<CompraGov>,
+    pub gPagAntecipado: Option<Vec<String>>,
 }
 
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Clone)]
 pub struct Emit {
-    pub CNPJ: String,
-    pub 
+    #[serde(flatten)]
+    pub EmitenteId: EmitenteId,
     pub xNome: String,
     pub xFant: Option<String>,
+    pub enderEmit: EnderEmi,
+    pub IE: String,
+    pub IEST: Option<String>,
+    pub IM: Option<String>,
+    pub CNAE: Option<String>,
+    pub CRT: u8,
+
+
+}
+
+#[derive(Debug, Default, Serialize, Clone)]
+pub struct Avulsa {
+    pub CNPJ: Option<String>,
+    pub xOrgao: String,
+    pub matr: String,
+    pub xAgente: String,
+    pub fone: Option<String>,
+    pub UF: UF,
+    pub nDAR: Option<String>,
+    pub dEmi: Option<String>,
+    pub vDAR: Option<Decimal>,
+    pub repEmi: String,
+    pub dPag: Option<String>,
+}
+
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct Dest {
+    #[serde(flatten)]
+    pub EmitenteId: EmitenteId,
+
+    pub xNome: String,
+    pub enderDest: EnderEmi,
+    pub IE: Option<String>,
+    pub ISUF: Option<String>,
+    pub IM: Option<String>,
+    pub email: Option<String>,
 
 }
 
 
-
-
-pub struct EnderEmit {
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct EnderEmi {
     pub xLgr: String,
     pub nro: String,
     pub xCpl: Option<String>,
@@ -66,7 +128,35 @@ pub struct EnderEmit {
     pub fone: Option<String>
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct Local {
+    #[serde(flatten)]
+    pub EmitenteId: EmitenteId,
+
+    pub xNome: Option<String>,
+    pub xLgr: String,
+    pub nro: String,
+    pub xCpl: Option<String>,
+    pub xBairro: String,
+    pub cMun: u32,
+    pub xMun: String,
+    pub UF: UF,
+    pub CEP: Option<String>,
+    pub cPais: Option<String>,
+    pub xPais: Option<String>,
+    pub fone: Option<String>,
+    pub email: Option<String>,
+    pub IE: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CompraGov {
+    pub tpEnteGov: u8,
+    pub pRedutor: Decimal,
+    pub tpOperGov: u8,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub enum NFRef {
     refNFe { chave: String },
     refNFeSig { chave: String },
@@ -82,7 +172,17 @@ pub enum NFRef {
         cUF: u8,
         AAMM: String,
         #[serde(flatten)]
-        id: EmitenteId,
+        EmitenteId: EmitenteId,
+        IE: String,
+        r#mod: u8,
+        serie: u16,
+        nNF: u32
+    },
+    refCTe { chave: String },
+    refECF {
+        r#mod: String,
+        nECF: String,
+        nCOO: String
     }
 }
 
@@ -93,15 +193,30 @@ impl Default for NFRef {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
 pub enum UF {
     AC, AL, AM, AP, BA, CE, DF, ES, GO, MA,
     MG, MS, MT, PA, PB, PE, PI, PR, RJ, RN,
     RO, RR, RS, SC, SE, SP, TO,
 }
 
-#[derive(Debug, Serialize)]
-enum EmitenteId {
+impl Default for UF {
+    fn default() -> Self {
+        UF::MG
+    }
+    
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
+pub enum EmitenteId {
     CNPJ {CNPJ: String},
-    CPF {CPF: String}
+    CPF {CPF: String},
+    idEstrangeiro {idEstrangeiro: String},
+}
+
+impl Default for EmitenteId {
+    fn default() -> Self {
+        EmitenteId::CNPJ { CNPJ: String::new() }
+    }
 }

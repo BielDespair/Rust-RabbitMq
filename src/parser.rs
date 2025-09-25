@@ -9,7 +9,7 @@ mod nfes;
 
 fn main() {
     logger::register_logger();
-    let file:Vec<u8>  = read_file_bytes("./data/Mod55.xml").unwrap();
+    let file:Vec<u8>  = fs::read("./data/Mod65.xml").unwrap();
 
     
     let mut durations: Vec<std::time::Duration> = Vec::new();
@@ -71,7 +71,7 @@ pub fn parse_nfe_mod_57() {
 }
 
 pub fn parse_nfe_mod_65(xml_bytes: &[u8]) {
-    let mut reader: Reader<&[u8] = Reader::from_reader(xml_bytes);
+    let mut reader: Reader<&[u8]> = Reader::from_reader(xml_bytes);
     reader.config_mut().trim_text(true);
 
     loop {
@@ -134,10 +134,9 @@ pub enum ModNfe {
     Mod65,
     Desconhecido
 }
-
 impl From<&str> for ModNfe {
-    fn from(s: &str) -> Self {
-        match s {
+    fn from(value: &str) -> Self {
+        match value {
             "55" => ModNfe::Mod55,
             "57" => ModNfe::Mod57,
             "65" => ModNfe::Mod65,
@@ -145,11 +144,3 @@ impl From<&str> for ModNfe {
         }
     }
 }
-
-pub struct XmlJson<T> {
-    company_id: i128,
-    org_id: i128,
-
-    nfes: Vec<T>
-}
-

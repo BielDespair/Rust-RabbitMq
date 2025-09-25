@@ -1032,11 +1032,13 @@ gás natural e em outras hipóteses definidas no regulamento</xs:documentation>
 		<xs:sequence>
 			<xs:element name="tpEnteGov" type="TEnteGov">
 				<xs:annotation>
-					<xs:documentation>Para administração pública direta e suas autarquias e fundações:
-1=União
-2=Estados
-3=Distrito Federal
-4=Municípios</xs:documentation>
+					<xs:documentation>
+						Para administração pública direta e suas autarquias e fundações:
+						1=União
+						2=Estados
+						3=Distrito Federal
+						4=Municípios
+					</xs:documentation>
 				</xs:annotation>
 			</xs:element>
 			<xs:element name="pRedutor" type="TDec_0302_04">
@@ -1046,9 +1048,11 @@ gás natural e em outras hipóteses definidas no regulamento</xs:documentation>
 			</xs:element>
 			<xs:element name="tpOperGov" type="TOperCompraGov">
 				<xs:annotation>
-					<xs:documentation>Tipo da operação com ente governamental:
-1 - Fornecimento
-2 - Recebimento do Pagamento</xs:documentation>
+					<xs:documentation>
+					Tipo da operação com ente governamental:
+					1 - Fornecimento
+					2 - Recebimento do Pagamento
+					</xs:documentation>
 				</xs:annotation>
 			</xs:element>
 		</xs:sequence>

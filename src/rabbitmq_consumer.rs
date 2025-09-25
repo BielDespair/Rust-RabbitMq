@@ -1,4 +1,13 @@
-use amqprs::{callbacks::{DefaultChannelCallback, DefaultConnectionCallback}, channel::{BasicAckArguments, BasicConsumeArguments, Channel, QueueBindArguments, QueueDeclareArguments}, connection::{Connection, OpenConnectionArguments}, consumer::AsyncConsumer, BasicProperties, Deliver};
+use amqprs::{
+    BasicProperties, Deliver,
+    callbacks::{DefaultChannelCallback, DefaultConnectionCallback},
+    channel::{
+        BasicAckArguments, BasicConsumeArguments, Channel, QueueBindArguments,
+        QueueDeclareArguments,
+    },
+    connection::{Connection, OpenConnectionArguments},
+    consumer::AsyncConsumer,
+};
 use async_trait::async_trait;
 use tokio::time::{self, sleep};
 
@@ -16,12 +25,15 @@ pub struct RabbitMqConsumer {
 
 impl RabbitMqConsumer {
     pub async fn new(rabbit_variables: RabbitVariables) -> Self {
-
         let conn: Connection;
         let channels: Vec<Channel> = Vec::new();
 
         conn = rabbitmq::connect_rabbitmq(&rabbit_variables).await;
-        Self { rabbit_variables: rabbit_variables, connection: conn, channels }
+        Self {
+            rabbit_variables: rabbit_variables,
+            connection: conn,
+            channels,
+        }
     }
 
     pub async fn start_consuming(&mut self) {
@@ -29,7 +41,7 @@ impl RabbitMqConsumer {
             self.initialize_channels().await;
             self.register_consuming_channels().await;
         }
-        
+
         loop {
             if !self.connection.is_open() {
                 log::error!("RabbitMQ Connection was closed");
@@ -41,38 +53,39 @@ impl RabbitMqConsumer {
         }
     }
 
-
-
-
     async fn initialize_channels(&mut self) {
-        rabbitmq::initialize_channels(&self.rabbit_variables, &self.connection, &mut self.channels).await;
+        rabbitmq::initialize_channels(&self.rabbit_variables, &self.connection, &mut self.channels)
+            .await;
     }
 
     async fn register_consuming_channels(&self) {
         for channel in self.channels.iter() {
             // Consumer tag deve vir de rabbit variables.
-            let args: BasicConsumeArguments = BasicConsumeArguments::new(
-                &self.rabbit_variables.queue_name, "parser-xml")
-                .manual_ack(true)
-                .finish();
-            
-            let consume: XmlConsumer = XmlConsumer{manual_ack: true};
+            let args: BasicConsumeArguments =
+                BasicConsumeArguments::new(&self.rabbit_variables.queue_name, "parser-xml")
+                    .manual_ack(true)
+                    .finish();
+
+            let consume: XmlConsumer = XmlConsumer { manual_ack: true };
             let tag = channel.basic_consume(consume, args).await;
 
             match tag {
                 Ok(content) => log::info!("Consumer connected with tag {}", content),
-                Err(e) => log::info!("Failed to connect consumer: {}", e)
+                Err(e) => log::info!("Failed to connect consumer: {}", e),
             }
         }
     }
 }
 
-
-
 #[async_trait]
 impl AsyncConsumer for XmlConsumer {
-    async fn consume(&mut self, channel: &Channel, deliver: Deliver, _basic_properties: BasicProperties, content: Vec<u8>) {        
-
+    async fn consume(
+        &mut self,
+        channel: &Channel,
+        deliver: Deliver,
+        _basic_properties: BasicProperties,
+        content: Vec<u8>,
+    ) {
         let returned_string = match std::str::from_utf8(&content) {
             Ok(r) => r,
             Err(e) => {
@@ -93,5 +106,3 @@ impl AsyncConsumer for XmlConsumer {
         };
     }
 }
-
-

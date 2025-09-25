@@ -1,9 +1,10 @@
-use amqprs::{ callbacks, channel::{self, Channel}, connection::{self, Connection}, BasicProperties, Deliver };
+use amqprs::{
+    BasicProperties, Deliver, callbacks,
+    channel::{self, Channel},
+    connection::{self, Connection},
+};
 use std::env;
 use tokio::time::sleep;
-
-
-
 
 #[derive(Clone)]
 pub struct RabbitVariables {
@@ -24,15 +25,12 @@ pub struct Message {
     pub body: String,
 }
 
-
-
 #[inline]
 fn env_not_present(var_name: &str) -> String {
     return format!("Enviroment variable '{}' not set", var_name);
 }
 
 pub fn initialize_rabbit_variables() -> RabbitVariables {
-    
     let host = env::var("RABBIT_HOST").expect(&env_not_present("RABBIT_HOST"));
     let port: u16 = env::var("RABBIT_PORT").unwrap().parse().unwrap();
     let username = env::var("RABBIT_USER").expect(&env_not_present("RABBIT_USER"));
@@ -52,7 +50,7 @@ pub fn initialize_rabbit_variables() -> RabbitVariables {
         num_channels,
         routing_key,
         exchange_name,
-        consumer
+        consumer,
     }
 }
 
@@ -150,18 +148,29 @@ pub async fn initialize_channels(
     }
 }
 
-
-pub async fn publish(content: &String, channel: &mut Channel, exchange_name: &String, routing_key: &String) -> bool {
-    
+pub async fn publish(
+    content: &String,
+    channel: &mut Channel,
+    exchange_name: &String,
+    routing_key: &String,
+) -> bool {
     let args = channel::BasicPublishArguments::new(exchange_name, routing_key);
 
-    let result = channel.basic_publish(BasicProperties::default(), content.as_bytes().to_vec(), args).await;
+    let result = channel
+        .basic_publish(
+            BasicProperties::default(),
+            content.as_bytes().to_vec(),
+            args,
+        )
+        .await;
 
     match result {
-        Ok(_) => {return true;}
+        Ok(_) => {
+            return true;
+        }
         Err(e) => {
             log::error!("Could not publish message: {e}");
-            return  false;
+            return false;
         }
     }
 }
