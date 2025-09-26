@@ -20,7 +20,7 @@ pub fn register_logger() {
 
     let log_res: Result<(), log::SetLoggerError> = simplelog::CombinedLogger::init(vec![
         TermLogger::new(
-            LevelFilter::Info,
+            LevelFilter::Debug,
             ConfigBuilder::new()
                 .set_time_format_custom(format_description!(
                     "[year]-[month]-[day] [hour]:[minute]:[second] +[offset_hour]"

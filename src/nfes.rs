@@ -1,5 +1,8 @@
+#![allow(non_snake_case, non_camel_case_types)]
 use rust_decimal::Decimal;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize};
+
+
 
 
 #[derive(Debug, Default, Serialize)]
@@ -69,7 +72,7 @@ pub struct Ide {
     pub verProc: String,
     pub dhCont: Option<String>,
     pub xJust: Option<String>,
-    pub NFref: Vec<NFRef>,
+    pub NFref: Option<Vec<NFRef>>,
     pub gCompraGov: Option<CompraGov>,
     pub gPagAntecipado: Option<Vec<String>>,
 }
@@ -166,38 +169,47 @@ pub struct CompraGov {
 
 #[derive(Debug, Serialize)]
 pub enum NFRef {
-    refNFe { chave: String },
-    refNFeSig { chave: String },
-    refNF {
-        cUF: u8,
-        AAMM: String,
-        CNPJ: String,
-        r#mod: u8,
-        serie: u16,
-        nNF: u32
-    },
-    refNFP {
-        cUF: u8,
-        AAMM: String,
-        #[serde(flatten)]
-        EmitenteId: EmitenteId,
-        IE: String,
-        r#mod: u8,
-        serie: u16,
-        nNF: u32
-    },
-    refCTe { chave: String },
-    refECF {
-        r#mod: String,
-        nECF: String,
-        nCOO: String
-    }
+    refNFe (String),
+    refNFeSig (String),
+    refNF (RefNFData),
+    refNFP (RefNFPData),
+    refCTe (String),
+    refECF (RefECFData)
 }
 
 impl Default for NFRef {
     fn default() -> Self {
-        NFRef::refNFe { chave: String::new() }
+        NFRef::refNFe(String::new())
     }
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct RefNFData {
+    pub cUF: u8,
+    pub AAMM: String,
+    pub CNPJ: String,
+    pub r#mod: u8,
+    pub serie: u16,
+    pub nNF: u32
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct RefNFPData {
+    pub cUF: u8,
+    pub AAMM: String,
+    #[serde(flatten)]
+    pub EmitenteId: EmitenteId,
+    pub IE: String,
+    pub r#mod: u8,
+    pub serie: u16,
+    pub nNF: u32
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct RefECFData {
+    pub r#mod: String,
+    pub nECF: String,
+    pub nCOO: String
 }
 
 
@@ -215,16 +227,50 @@ impl Default for UF {
     
 }
 
+impl From<&str> for UF {
+    fn from(s: &str) -> Self {
+        match s {
+            "AC" => UF::AC,
+            "AL" => UF::AL,
+            "AM" => UF::AM,
+            "AP" => UF::AP,
+            "BA" => UF::BA,
+            "CE" => UF::CE,
+            "DF" => UF::DF,
+            "ES" => UF::ES,
+            "GO" => UF::GO,
+            "MA" => UF::MA,
+            "MG" => UF::MG,
+            "MS" => UF::MS,
+            "MT" => UF::MT,
+            "PA" => UF::PA,
+            "PB" => UF::PB,
+            "PE" => UF::PE,
+            "PI" => UF::PI,
+            "PR" => UF::PR,
+            "RJ" => UF::RJ,
+            "RN" => UF::RN,
+            "RO" => UF::RO,
+            "RR" => UF::RR,
+            "RS" => UF::RS,
+            "SC" => UF::SC,
+            "SE" => UF::SE,
+            "SP" => UF::SP,
+            "TO" => UF::TO,
+            _ => UF::default(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
-#[serde(untagged)]
 pub enum EmitenteId {
-    CNPJ {CNPJ: String},
-    CPF {CPF: String},
-    idEstrangeiro {idEstrangeiro: String},
+    CNPJ(String),
+    CPF (String),
+    idEstrangeiro(String),
 }
 
 impl Default for EmitenteId {
     fn default() -> Self {
-        EmitenteId::CNPJ { CNPJ: String::new() }
+        EmitenteId::CNPJ(String::new())
     }
 }

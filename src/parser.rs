@@ -24,8 +24,9 @@ async fn main() {
     let t2 = Instant::now();
     //let object = String::from("NFCE33250800935769000100652010002482761002499990.xml");
     //let file: String = minio_client::download_object(&object, &minio_variables).await.expect("Failed to download file");
+    //fs::write("./dump.xml", &file).expect("Failed to write dump.xml");
+    let file: String = fs::read_to_string("./data/Mod65.xml").unwrap();
 
-    let file: String = fs::read_to_string("./data/Mod55.xml").unwrap();
     println!("Download: {:?}", t2.elapsed());
     // medir tempo do parser
     let t3: Instant = Instant::now();

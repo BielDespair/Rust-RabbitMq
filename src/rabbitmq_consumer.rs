@@ -11,9 +11,8 @@ use amqprs::{
 use async_trait::async_trait;
 use tokio::{sync::Mutex, time::{self, sleep}};
 
-use crate::{rabbitmq::{self, RabbitVariables}, rabbitmq_producer::RabbitMqProducer};
 
-
+use crate::{rabbitmq::{self, RabbitVariables}};
 
 pub struct XmlConsumer {
     manual_ack: bool,
@@ -25,6 +24,7 @@ pub struct XmlConsumer {
 
 pub struct RabbitMqConsumer {
     rabbit_variables: RabbitVariables,
+    minio_bucket_name: String,
     connection: Arc<Connection>,
     consumer_channels: Vec<Channel>,
     producer_channels: Arc<Mutex<Vec<Channel>>>,
@@ -32,11 +32,12 @@ pub struct RabbitMqConsumer {
 }
 
 impl RabbitMqConsumer {
-    pub async fn new(rabbit_variables: RabbitVariables, connection: Arc<Connection>) -> Self {
+    pub async fn new(rabbit_variables: RabbitVariables, minio_bucket_name: String, connection: Arc<Connection>) -> Self {
 
         let counter = Arc::new(AtomicUsize::new(0));
         Self {
             rabbit_variables: rabbit_variables,
+            minio_bucket_name: minio_bucket_name,
             connection: connection,
             consumer_channels: Vec::new(),
             producer_channels: Arc::new(Mutex::new(Vec::new())),
