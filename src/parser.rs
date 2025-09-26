@@ -1,10 +1,7 @@
 use std::fs;
 use std::time::Instant;
-use quick_xml::{reader, Reader};
-use quick_xml::events::Event;
 
 use crate::minio_client::MinioVariables;
-use crate::nfe_parser::ModNfe;
 use dotenv::dotenv;
 mod logger;
 mod nfes;
@@ -25,20 +22,17 @@ async fn main() {
 
     // medir tempo do download
     let t2 = Instant::now();
-    let object = String::from("NFCE33250800935769000100652010002482761002499990.xml");
-    let file: String = minio_client::download_object(&object, &minio_variables).await.expect("Failed to download file");
-    let download_duration = t2.elapsed();
-        println!("Download: {:?}", download_duration);
+    //let object = String::from("NFCE33250800935769000100652010002482761002499990.xml");
+    //let file: String = minio_client::download_object(&object, &minio_variables).await.expect("Failed to download file");
+
+    let file: String = fs::read_to_string("./data/Mod55.xml").unwrap();
+    println!("Download: {:?}", t2.elapsed());
     // medir tempo do parser
-    let t3 = Instant::now();
-    let modelo: ModNfe = nfe_parser::get_mod_nfe(&file);
-    let parse_duration = t3.elapsed();
-    println!("Parse modelo: {:?}", parse_duration);
+    let t3: Instant = Instant::now();
+    let json: String = nfe_parser::parse_nfe(file).expect("Failed to parse XML");
     
-
-
-
-    println!("Modelo: {:?}", modelo);
+    println!("Parse modelo: {:?}", t3.elapsed());
+    println!("JSON: {}", json);
     /*
     let xml: String = fs::read_to_string("./data/Mod65.xml").unwrap();
     let conf: Config = Config::new_with_custom_values(leading_zero_as_string, xml_attr_prefix, xml_text_node_prop_name, empty_element_handling);
