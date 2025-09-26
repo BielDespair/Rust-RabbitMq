@@ -61,7 +61,7 @@ pub fn parse_nfe_mod_65(xml: String) -> Option<String> {
 }
 
 #[allow(non_snake_case)]
-fn parse_nfeProc_65(reader: &mut Reader<&[u8]>) -> Option<String> {
+fn parse_nfeProc_65(reader: &mut XmlReader) -> Option<String> {
     let mut json: NfeJson = NfeJson::default();
 
     let mut nfe: NFe = NFe::default();
@@ -93,7 +93,7 @@ fn parse_nfeProc_65(reader: &mut Reader<&[u8]>) -> Option<String> {
 }
 
 #[allow(non_snake_case)]
-fn parse_enviNfe_65(reader: &mut Reader<&[u8]>) -> Option<String> {
+fn parse_enviNfe_65(reader: &mut XmlReader) -> Option<String> {
     return None;
 }
 
@@ -101,9 +101,9 @@ pub fn parse_nfe_mod_57(xml: String) -> Option<String> {
     return Some("MOD56-PARSED".to_string());
 }
 
-pub fn parse_ide(reader: &mut Reader<&[u8]>) -> Ide {
+pub fn parse_ide(reader: &mut XmlReader) -> Ide {
     // Começa com uma struct com valores padrão
-    let mut ide = Ide::default();
+    let mut ide: Ide = Ide::default();
 
     // Transformar NFRef em Option<Vec<NFRef>>
     // Ver as nuâncias de como lidar com isso
@@ -117,11 +117,12 @@ pub fn parse_ide(reader: &mut Reader<&[u8]>) -> Ide {
                 }
 
                 b"gCompraGov" => {
-                    todo!()
+                    ide.gCompraGov = Some(parse_gCompraGov(reader));
                 }
 
                 b"gPagAntecipado" => {
-                    todo!()
+                    let refNFes: Vec<String> = parse_gPagAntecipado(reader);
+                    ide.gPagAntecipado = Some(refNFes);
                 }
 
                 name => {
@@ -327,6 +328,8 @@ fn parse_refNF(reader: &mut XmlReader) -> NFRef {
     panic!("Unexpected error while parsing refNF.");
 }
 
+
+#[allow(non_snake_case)]
 fn parse_refNFP(reader: &mut XmlReader) -> NFRef {
         let mut refNFP: RefNFPData = RefNFPData::default();
     
@@ -361,6 +364,7 @@ fn parse_refNFP(reader: &mut XmlReader) -> NFRef {
     panic!("Unexpected error while parsing refNFP.");
 }
 
+#[allow(non_snake_case)]
 fn parse_refECF(reader: &mut XmlReader) -> NFRef {
     let mut refECF: RefECFData = RefECFData::default();
     
@@ -389,7 +393,9 @@ fn parse_refECF(reader: &mut XmlReader) -> NFRef {
     }
     panic!("Unexpected error while parsing refECF.");
 }
-pub fn parse_compra_gov(reader: &mut XmlReader) -> Option<CompraGov> {
+
+#[allow(non_snake_case)]
+pub fn parse_gCompraGov(reader: &mut XmlReader) -> CompraGov {
     let mut cg: CompraGov = CompraGov::default();
 
     loop {
@@ -403,24 +409,54 @@ pub fn parse_compra_gov(reader: &mut XmlReader) -> Option<CompraGov> {
                     b"pRedutor" => cg.pRedutor = txt.parse().unwrap(),
                     b"tpOperGov" => cg.tpOperGov = txt.parse().unwrap(),
                     _ => {
-                        log::warn!(
-                            "Elemento CompraGov não mapeado: {}",
-                            std::str::from_utf8(e.name().as_ref()).unwrap_or("<inválido>")
-                        );
+                        log::warn!("Elemento CompraGov não mapeado: {}", std::str::from_utf8(e.name().as_ref()).unwrap_or("<inválido>"));
+                        break;
                     }
                 }
             }
 
             Ok(Event::End(e)) if e.name().as_ref() == b"gCompraGov" => {
-                return Some(cg);
+                return cg;
+            }
+
+            Ok(Event::Eof) => {
+                log::error!("Unexpected Eof while parsing gCompraGov");
+                break;
             }
 
             Err(e) => log::error!("Error reading gCompraGov: {}", e),
-            _ => {
-                return None;
-            }
+            _ => {}
         }
     }
+    panic!("Unexpected error while parsing gCompraGov.");
+}
+
+
+#[allow(non_snake_case)]
+pub fn parse_gPagAntecipado(reader: &mut XmlReader) -> Vec<String> {
+    let mut refNfes: Vec<String> = Vec::new();
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => if e.name().as_ref() == b"refNFe" {
+                refNfes.push(read_text_string(reader, &e));
+            }
+
+            // Tag terminou
+            Ok(Event::End(e)) => if e.name().as_ref() == b"gPagAntecipado" {
+                return refNfes;
+            }
+
+            Ok(Event::Eof) => {
+                log::error!("Unexpected Eof while parsing gPagAntecipado");
+                break;
+            }
+
+            Err(e) => log::error!("Error reading gPagAntecipado: {}", e),
+            _ => {}
+        }
+    }
+    panic!("Unexpected error while parsing gPagAntecipado.");
 }
 
 pub fn get_mod_nfe(xml_bytes: &String) -> ModNfe {
@@ -450,7 +486,7 @@ pub fn get_mod_nfe(xml_bytes: &String) -> ModNfe {
 }
 
 #[inline]
-fn read_text_string(reader: &mut Reader<&[u8]>, e: &BytesStart) -> String {
+fn read_text_string(reader: &mut XmlReader, e: &BytesStart) -> String {
     let txt: String = reader.read_text(e.name()).unwrap().into_owned();
 
     //log::info!("Txt: {}", txt);
