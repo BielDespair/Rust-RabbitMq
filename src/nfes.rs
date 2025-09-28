@@ -2,47 +2,434 @@
 use rust_decimal::Decimal;
 use serde::{Serialize};
 
+use crate::impostos::{cofins::COFINS, cofins_st::COFINSST, icms_uf_dest::ICMSUFDest, ii::Ii, ipi::Ipi, is::IS, issqn::ISSQN, pis::PIS, pis_st::PISST};
 
 
 
 #[derive(Debug, Default, Serialize)]
 pub struct NfeJson {
-    pub company_id: u128,
-    pub org_id: u128, 
+    pub company_id: i128,
+    pub org_id: i128, 
     pub nfes: Vec<NFe>,
 }
 #[derive(Debug, Default, Serialize)]
 pub struct NFe {
+    pub Id: String,
     pub ide: Ide,
     pub emit: Emit,
+    pub produtos: Vec<Det>,
     pub avulsa: Option<Avulsa>,
     pub dest: Option<Dest>,
     pub retirada: Option<Local>,
     pub entrega: Option<Local>, 
     pub autXML: Option<Vec<EmitenteId>>,
-    pub produtos: Vec<Prod>,
 
 }
 
 #[derive(Debug, Default, Serialize)]
+pub struct Det {
+    pub produto: Prod,
+    pub imposto: Imposto
+}
+
+#[derive(Debug, Default, Serialize)]
 pub struct Prod {
-    pub nItem: u32,
     pub cProd: String,
     pub cEAN: Option<String>,
+    pub cBarra: Option<String>,
     pub xProd: String,
     pub NCM: String,
+    pub NVE: Option<Vec<String>>,
+    pub CEST: Option<String>,
+    pub indEscala: Option<bool>,
+    pub CNPJFab: Option<String>,
+    pub cBenef: Option<String>,
+    pub gCred: Option<Vec<GCred>>,
+    pub EXTIPI: Option<String>,
     pub CFOP: String,
     pub uCom: String,
-    pub qCom: f64,
-    pub vUnCom: f64,
-    pub vProd: f64,
-    pub cEANTrib: Option<String>,
+    pub qCom: Decimal,
+    pub vUnCom: Decimal,
+    pub vProd: Decimal,
+    pub cEANTrib: String,
+    pub cBarraTrib: Option<String>,
     pub uTrib: String,
-    pub qTrib: f64,
-    pub vUnTrib: f64,
-    pub indTot: u8,
+    pub qTrib: Decimal,
+    pub vUnTrib: Decimal,
+    pub vFrete: Option<Decimal>,
+    pub vSeg: Option<Decimal>,
+    pub vDesc: Option<Decimal>,
+    pub vOutro: Option<Decimal>,
+    pub indTot: bool,
+    pub indBemMovelUsado: Option<bool>,
+    pub DI: Option<Vec<DI>>,
+    pub detExport: Option<Vec<DetExport>>,
+    pub xPed: Option<String>,
+    pub nItemPed: Option<String>,
+    pub nFCI: Option<String>,
+    //pub rastro: Option<Vec<String>>,
+    pub infProdNNF: Option<InfProdNNF>,
+    pub infProdEmb: Option<InfProdEmb>,
+    pub especifico: Option<ProdutoEspecifico>,
+
+
+
     // More fields can be added as needed
 }
+
+#[derive(Debug, Default, Serialize)]
+pub struct Imposto {
+    pub vTotTrib: Option<Decimal>,
+    pub tributacao: Option<Tributacao>,
+    pub PIS: Option<PIS>,
+    pub PISST: Option<PISST>,
+    pub COFINS: Option<COFINS>,
+    pub COFINSST: Option<COFINSST>,
+    pub ICMSUFDest: Option<ICMSUFDest>,
+    pub IS: Option<IS>,
+    pub IBSCBS: Option<IBSCBS>
+    
+}
+
+#[derive(Debug, Serialize)]
+pub enum Tributacao {
+    Mercadoria {
+        ICMS: Icms,
+        IPI: Option<Ipi>,
+        II: Option<Ii>
+    },
+    Servico {
+        IPI: Option<Ipi>,
+        ISSQN: ISSQN,
+    }
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct Icms {
+    // --- CAMPOS DE IDENTIFICAÇÃO ---
+    // Presentes em praticamente todos, mas opcionais para cobrir todas as exceções.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orig: Option<String>,
+    #[serde(rename = "CST", skip_serializing_if = "Option::is_none")]
+    pub cst: Option<String>,
+    #[serde(rename = "CSOSN", skip_serializing_if = "Option::is_none")]
+    pub csosn: Option<String>,
+
+    // --- CÁLCULO ICMS NORMAL (CST 00, 10, 20, 51, 70, 90, Part) ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modBC: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vBC: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pRedBC: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pICMS: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMS: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSOp: Option<Decimal>, // Específico do ICMS51
+
+    // --- FCP (Fundo de Combate à Pobreza) ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vBCFCP: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pFCP: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vFCP: Option<Decimal>,
+
+    // --- ICMS ST (CÁLCULO NA OPERAÇÃO) ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modBCST: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pMVAST: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pRedBCST: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vBCST: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pICMSST: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSST: Option<Decimal>,
+    
+    // --- FCP ST ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vBCFCPST: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pFCPST: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vFCPST: Option<Decimal>,
+
+    // --- ICMS ST RETIDO (OPERAÇÃO ANTERIOR - CST 60, CSOSN 500) ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vBCSTRet: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pST: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSSubstituto: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSSTRet: Option<Decimal>,
+    
+    // --- FCP ST RETIDO ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vBCFCPSTRet: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pFCPSTRet: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vFCPSTRet: Option<Decimal>,
+
+    // --- ICMS DESONERADO ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSDeson: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub motDesICMS: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub indDeduzDeson: Option<bool>,
+    
+    // --- ICMS ST DESONERADO ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSSTDeson: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub motDesICMSST: Option<String>,
+
+    // --- ICMS EFETIVO ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pRedBCEfet: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vBCEfet: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pICMSEfet: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSEfet: Option<Decimal>,
+
+    // --- ICMS DIFERIMENTO (ICMS51) ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pDif: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSDif: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cBenefRBC: Option<String>, // Também do ICMS51
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pFCPDif: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vFCPDif: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vFCPEfet: Option<Decimal>,
+
+    // --- ICMS MONOFÁSICO (CST 02, 15, 53, 61) ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub qBCMono: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adRemICMS: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSMono: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub qBCMonoReten: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adRemICMSReten: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSMonoReten: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pRedAdRem: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub motRedAdRem: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub qBCMonoRet: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adRemICMSRet: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSMonoRet: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSMonoOp: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSMonoDif: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub qBCMonoDif: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adRemICMSDif: Option<Decimal>,
+
+    // --- ICMS PARTILHA ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pBCOp: Option<Decimal>,
+    #[serde(rename = "UFST", skip_serializing_if = "Option::is_none")]
+    pub ufst: Option<UF>,
+
+    // --- ICMS ST (REPASSE) ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vBCSTDest: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vICMSSTDest: Option<Decimal>,
+
+    // --- SIMPLES NACIONAL (CRÉDITO) ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pCredSN: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vCredICMSSN: Option<Decimal>,
+}
+
+
+
+#[derive(Debug, Serialize)]
+pub struct Veiculo {
+    pub tcOp: u8,
+    pub chassi: String,
+    pub cCor: String,
+    pub xCor: String,
+    pub pot: String,
+    pub cilin: String,
+    pub pesoL: String,
+    pub pesoB: String,
+    pub nSerie: String,
+    pub tpComb: u8,
+    pub nMotor: String,
+    pub CMT: String,
+    pub dist: String,
+    pub anoMod: String,
+    pub anoFab: String,
+    pub tpPint: String,
+    pub tpVeic: String,
+    pub espVeic: String,
+    pub VIN: char,
+    pub condVeic: String,
+    pub cMod: String,
+    pub cCorDENATRAN: String,
+    pub lota: u32,
+    pub tpRest: u8
+}
+
+#[derive(Debug, Serialize)]
+pub struct Medicamento {
+    pub cProdANVISA: String,
+    pub xMotivoIsencao: Option<String>,
+    pub vPMC: Decimal,
+
+}
+
+#[derive(Debug, Serialize)]
+pub struct Arma {
+    pub tpArma: String,
+    pub nSerie: String,
+    pub nCano: String,
+    pub descr: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Combustivel {
+    pub cProdANP: String,
+    pub descANP: String,
+    pub pGLP: Option<String>,
+    pub pGNn: Option<String>,
+    pub pGNi: Option<String>,
+    pub vPart: Option<String>,
+    pub CODIF: Option<String>,
+    pub qTemp: Option<String>,
+    pub UFCons: UF,
+    pub CIDE: Option<Cide>,
+    pub encerrante: Option<Encerrante>,
+    pub pBio: Option<Decimal>,
+    pub origComb: Option<Vec<OrigComb>>
+}
+
+#[derive(Debug, Serialize)]
+pub struct Cide {
+    pub qBCProd: Decimal,
+    pub vAliqProd: Decimal,
+    pub vCIDE: Decimal
+}
+
+#[derive(Debug, Serialize)]
+pub struct Encerrante {
+    pub nBico: String,
+    pub nBomba: Option<String>,
+    pub nTanque: String,
+    pub vEncIni: Decimal,
+    pub vEncFin: Decimal,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrigComb {
+    pub indImport: bool,
+    pub cUFOrig: u8,
+    pub pOrig: Decimal,
+
+}
+
+
+#[derive(Debug, Serialize)]
+pub enum ProdutoEspecifico {
+    veicProd(Veiculo),
+    med(Medicamento),
+    arma(Vec<Arma>),
+    comb(Combustivel),
+    nRECOPI(String)
+}
+
+impl Default for ProdutoEspecifico {
+    fn default() -> Self {
+        ProdutoEspecifico::nRECOPI("".to_string())
+    }
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct GCred {
+    pub cCredPresumido: String,
+    pub pCredPresumido: Decimal,
+    pub vCredPresumido: Decimal,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct DI {
+    pub nDI: String,
+    pub dDI: String,
+    pub xLocDesemb: String,
+    pub UFDesemb: UF,
+    pub dDesemb: String,
+    pub tpViaTransp: u8,
+    pub vAFRMM: Option<Decimal>,
+    pub tpIntermedio: u8,
+    pub EmitenteId: EmitenteId,
+    pub UFTerceiro: Option<UF>,
+    pub cExportador: Option<String>,
+    pub adi: Option<Vec<Adi>>,
+    // More fields can be added as needed
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct Adi {
+    pub nAdicao: Option<String>,
+    pub nSeqAdic: Option<String>,
+    pub cFabricante: String,
+    pub vDescDI: Option<Decimal>,
+    pub nDraw: Option<String>,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct DetExport {
+    pub nDraw: Option<String>,
+
+    #[serde(flatten)]
+    pub exportInd: Option<ExportInd>
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct ExportInd {
+    pub nRE: String,
+    pub chNFe: String,
+    pub qExport: Decimal,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct InfProdNNF {
+    pub cProdFisco: String,
+    pub cOperNFF: String,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct InfProdEmb {
+    pub xEmb: String,
+    pub qVolEmb: Decimal,
+    pub uEmb: String
+}
+
 
 #[derive(Debug, Default, Serialize)]
 pub struct Ide {
@@ -90,8 +477,6 @@ pub struct Emit {
     pub IM: Option<String>,
     pub CNAE: Option<String>,
     pub CRT: u8,
-
-
 }
 
 #[derive(Debug, Default, Serialize)]

@@ -4,6 +4,10 @@ mod rabbitmq_producer;
 mod rabbitmq_consumer;
 mod minio_client;
 
+mod nfes;
+mod impostos;
+
+
 use amqprs::connection::Connection;
 use dotenv::dotenv;
 use std::sync::{Arc};

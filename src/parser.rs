@@ -25,13 +25,21 @@ async fn main() {
     //let object = String::from("NFCE33250800935769000100652010002482761002499990.xml");
     //let file: String = minio_client::download_object(&object, &minio_variables).await.expect("Failed to download file");
     //fs::write("./dump.xml", &file).expect("Failed to write dump.xml");
-    let file: String = fs::read_to_string("./data/Mod65.xml").unwrap();
+    let file: String = fs::read_to_string("./data/Mod55.xml").unwrap();
 
     println!("Download: {:?}", t2.elapsed());
     // medir tempo do parser
     let t3: Instant = Instant::now();
-    let json: String = nfe_parser::parse_nfe(file).expect("Failed to parse XML");
     
+
+    let json: String = match nfe_parser::parse_nfe(file, 7, 2) {
+        Ok(json) => json,
+        Err(e) => {
+            println!("Parse modelo: {:?}", t3.elapsed());
+            log::error!("Error parsing NFe: {}", e);
+            return;
+        }
+    }; 
     println!("Parse modelo: {:?}", t3.elapsed());
     println!("JSON: {}", json);
 
