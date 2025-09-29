@@ -7,6 +7,7 @@ mod logger;
 mod nfes;
 mod nfe_parser;
 mod minio_client;
+mod impostos;
 
 #[tokio::main]
 async fn main() {
@@ -29,19 +30,21 @@ async fn main() {
 
     println!("Download: {:?}", t2.elapsed());
     // medir tempo do parser
-    let t3: Instant = Instant::now();
     
+    
+    const NUM_ITERATIONS: u32 = 20_000;
+    let mut parse_times: Vec<Duration> = Vec::new();
 
-    let json: String = match nfe_parser::parse_nfe(file, 7, 2) {
-        Ok(json) => json,
-        Err(e) => {
-            println!("Parse modelo: {:?}", t3.elapsed());
-            log::error!("Error parsing NFe: {}", e);
-            return;
-        }
-    }; 
-    println!("Parse modelo: {:?}", t3.elapsed());
-    println!("JSON: {}", json);
+    for _ in 0..NUM_ITERATIONS {
+        let t_start = Instant::now();
+        let _json = nfe_parser::parse_nfe(file.clone(), 7, 2).unwrap();
+        parse_times.push(t_start.elapsed());
+    }
+
+    let total: Duration = parse_times.iter().sum(); // requires nightly ou manualmente
+    let avg = parse_times.iter().sum::<Duration>() / NUM_ITERATIONS;
+    println!("Total: {:?}, Média: {:?}", total, avg);
+    //println!("JSON: {}", json);
 
     /*
     const NUM_ITERATIONS: u32 = 1;

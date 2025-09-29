@@ -5,6 +5,7 @@ pub mod pis;
 pub mod pis_st;
 pub mod cofins;
 pub mod cofins_st;
+pub mod icms;
 pub mod icms_uf_dest;
 pub mod is;
-mod ibs_cbs;
+pub mod ibs_cbs;

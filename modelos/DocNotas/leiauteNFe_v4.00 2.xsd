@@ -1114,8 +1114,8 @@ Preencher com &quot;2B&quot;, quando se tratar de Cupom Fiscal emitido por máqu
 												<xs:element name="indTot">
 													<xs:annotation>
 														<xs:documentation>Este campo deverá ser preenchido com:
- 0 – o valor do item (vProd) não compõe o valor total da NF-e (vProd)
- 1  – o valor do item (vProd) compõe o valor total da NF-e (vProd)</xs:documentation>
+																0 – o valor do item (vProd) não compõe o valor total da NF-e (vProd)
+																1  – o valor do item (vProd) compõe o valor total da NF-e (vProd)</xs:documentation>
 													</xs:annotation>
 													<xs:simpleType>
 														<xs:restriction base="xs:string">
@@ -1709,8 +1709,8 @@ Preencher com &quot;2B&quot;, quando se tratar de Cupom Fiscal emitido por máqu
 																<xs:element name="VIN">
 																	<xs:annotation>
 																		<xs:documentation>Informa-se o veículo tem VIN (chassi) remarcado.
-R-Remarcado
-N-NormalVIN</xs:documentation>
+																				R-Remarcado
+																				N-NormalVIN</xs:documentation>
 																	</xs:annotation>
 																	<xs:simpleType>
 																		<xs:restriction base="TString">

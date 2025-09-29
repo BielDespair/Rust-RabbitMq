@@ -3,6 +3,13 @@
 use rust_decimal::Decimal;
 use serde::Serialize;
 
+use crate::impostos::issqn::ISSQN;
+
+#[derive(Debug, Default, Serialize)]
+pub struct TributosServico {
+    pub IPI: Option<Ipi>,
+    pub ISSQN: ISSQN,
+}
 
 // O struct principal que representa a tag <IPI>
 #[derive(Debug, Default, Serialize)]

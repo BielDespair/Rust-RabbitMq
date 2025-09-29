@@ -1,3 +1,4 @@
+ /*
 #![allow(non_snake_case, non_camel_case_types)]
 use rust_decimal::Decimal;
 use serde::Serialize;
@@ -12,6 +13,7 @@ pub struct IBSCBS {
     pub tributacao: Option<TributacaoIBS>,
 
 }
+
 #[derive(Debug, Serialize)]
 pub enum TributacaoIBS {
     gIBSCBS(TCIBS),
@@ -36,3 +38,4 @@ pub struct TCIBS {
     pub vBC: Decimal,
     
 }
+     */
