@@ -876,7 +876,7 @@ fn parse_ICMS(reader: &mut XmlReader) -> Result<Icms, Box<dyn Error>> {
 
                     // --- ICMS PARTILHA ---
                     b"pBCOp" => ICMS.pBCOp = Some(txt.parse()?),
-                    b"UFST" => ICMS.ufst = Some(txt.into()), // Supondo que UF implementa From<String>
+                    b"UFST" => ICMS.ufst = Some(UF::from(txt.as_str())),
 
                     // --- ICMS ST (REPASSE) ---
                     b"vBCSTDest" => ICMS.vBCSTDest = Some(txt.parse()?),
@@ -886,7 +886,6 @@ fn parse_ICMS(reader: &mut XmlReader) -> Result<Icms, Box<dyn Error>> {
                     b"pCredSN" => ICMS.pCredSN = Some(txt.parse()?),
                     b"vCredICMSSN" => ICMS.vCredICMSSN = Some(txt.parse()?),
                     
-                    // Ignora tags não mapeadas
                     _ => {}
                 }
 
