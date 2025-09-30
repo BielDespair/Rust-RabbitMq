@@ -917,8 +917,7 @@
 		<xs:sequence>
 			<xs:element name="vDevTrib" type="TDec1302">
 				<xs:annotation>
-					<xs:documentation>Valor do tributo devolvido. No fornecimento de energia elétrica, água, esgoto e
-gás natural e em outras hipóteses definidas no regulamento</xs:documentation>
+					<xs:documentation>Valor do tributo devolvido. No fornecimento de energia elétrica, água, esgoto e gás natural e em outras hipóteses definidas no regulamento</xs:documentation>
 				</xs:annotation>
 			</xs:element>
 		</xs:sequence>
@@ -1083,12 +1082,12 @@ gás natural e em outras hipóteses definidas no regulamento</xs:documentation>
 				<xs:annotation>
 					<xs:documentation>Classificação de acordo com o art. 450, § 1º, da LC 214/25 para o cálculo do crédito presumido na ZFM</xs:documentation>
 					<xs:documentation>0 - Sem crédito presumido;
-1 - Bens de consumo final (55%);
-2 - Bens de capital (75%);
-3 - Bens intermediários (90,25%);
-4 - Bens de informática e outros definidos em legislação (100%).
-OBS: Percentuais definidos no art. 450, § 1º, da LC 214/25 para o cálculo do crédito presumido
-</xs:documentation>
+							1 - Bens de consumo final (55%);
+							2 - Bens de capital (75%);
+							3 - Bens intermediários (90,25%);
+							4 - Bens de informática e outros definidos em legislação (100%).
+							OBS: Percentuais definidos no art. 450, § 1º, da LC 214/25 para o cálculo do crédito presumido
+							</xs:documentation>
 				</xs:annotation>
 			</xs:element>
 			<xs:element name="vCredPresIBSZFM" type="TDec1302" minOccurs="0">

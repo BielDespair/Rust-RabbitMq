@@ -1,7 +1,8 @@
- /*
-#![allow(non_snake_case, non_camel_case_types)]
+ #![allow(non_snake_case, non_camel_case_types)]
 use rust_decimal::Decimal;
 use serde::Serialize;
+
+use crate::impostos::{cibs::TCIBS, monofasia::TMonofasia};
 
 
 /// Representa o grupo de Partilha do ICMS entre a UF de origem e destino (<ICMSUFDest>).
@@ -11,31 +12,30 @@ pub struct IBSCBS {
     pub cClassTrib: String,
     #[serde(flatten)]
     pub tributacao: Option<TributacaoIBS>,
+    pub gCredPresIBSZFM: Option<TCredPresIBSZFM>
 
 }
 
 #[derive(Debug, Serialize)]
 pub enum TributacaoIBS {
     gIBSCBS(TCIBS),
-
-    /// Tributação Monofásica.
-    #[serde(rename = "gIBSCBSMono")]
-    Monofasia(TMonofasia),
-
-    /// Transferência de Crédito.
-    #[serde(rename = "gTransfCred")]
-    TransferenciaCredito(TTransfCred),
+    gIBSCBSMono(TMonofasia),
+    gTransfCred(TTransfCred),
 }
 impl Default for TributacaoIBS {
     fn default() -> Self {
-        todo!()
+        return Self::gTransfCred(TTransfCred::default());
     }
 }
 
+#[derive(Debug, Default, Serialize)]
+pub struct TTransfCred {
+    pub vIBS: Decimal,
+    pub vCBS: Decimal,
+}
 
 #[derive(Debug, Default, Serialize)]
-pub struct TCIBS {
-    pub vBC: Decimal,
-    
+pub struct TCredPresIBSZFM {
+    pub tpCredPresIBSZFM: String,
+    pub vCredPresIBSZFM: Option<Decimal>,
 }
-     */

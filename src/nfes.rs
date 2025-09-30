@@ -2,7 +2,7 @@
 use rust_decimal::Decimal;
 use serde::{Serialize};
 
-use crate::impostos::{cofins::COFINS, cofins_st::COFINSST, icms::TributosMercadoria, icms_uf_dest::ICMSUFDest, ipi::TributosServico, is::IS, pis::PIS, pis_st::PISST};
+use crate::impostos::{cofins::COFINS, cofins_st::COFINSST, ibs_cbs::IBSCBS, icms::Icms, icms_uf_dest::ICMSUFDest, ii::Ii, ipi::{Ipi}, is::IS, issqn::ISSQN, pis::PIS, pis_st::PISST};
 
 
 
@@ -80,6 +80,7 @@ pub struct Prod {
 #[derive(Debug, Default, Serialize)]
 pub struct Imposto {
     pub vTotTrib: Option<Decimal>,
+    #[serde(flatten)]
     pub tributacao: Option<Tributacao>,
     pub PIS: Option<PIS>,
     pub PISST: Option<PISST>,
@@ -87,19 +88,27 @@ pub struct Imposto {
     pub COFINSST: Option<COFINSST>,
     pub ICMSUFDest: Option<ICMSUFDest>,
     pub IS: Option<IS>,
-    //pub IBSCBS: Option<IBSCBS>
+    pub IBSCBS: Option<IBSCBS>
     
 }
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
 pub enum Tributacao {
-    Mercadoria(TributosMercadoria),
-    Servico(TributosServico)
+    Mercadoria {
+        ICMS: Icms,
+        IPI: Option<Ipi>,
+        II: Option<Ii>
+    },
+    Servico {
+        IPI: Option<Ipi>,
+        ISSQN: ISSQN
+    }
 }
 
 impl Default for Tributacao {
     fn default() -> Self {
-        return Self::Mercadoria(TributosMercadoria::default());
+        return Self::Mercadoria { ICMS: Icms::default(), IPI: None, II: None }
     }
 }
 

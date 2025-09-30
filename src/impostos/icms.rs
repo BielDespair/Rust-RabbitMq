@@ -2,25 +2,20 @@
 use rust_decimal::Decimal;
 use serde::Serialize;
 
-use crate::{impostos::{ii::Ii, ipi::Ipi}, nfes::UF};
+use crate::nfes::UF;
 
-#[derive(Debug, Default, Serialize)]
-pub struct TributosMercadoria  {
-    pub ICMS: Icms,
-    pub IPI: Option<Ipi>,
-    pub II: Option<Ii>
-}
 
 #[derive(Debug, Default, Serialize)]
 pub struct Icms {
+    pub tipo: TipoICMS,
+
     // --- CAMPOS DE IDENTIFICAÇÃO ---
-    // Presentes em praticamente todos, mas opcionais para cobrir todas as exceções.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub orig: Option<String>,
-    #[serde(rename = "CST", skip_serializing_if = "Option::is_none")]
-    pub cst: Option<String>,
-    #[serde(rename = "CSOSN", skip_serializing_if = "Option::is_none")]
-    pub csosn: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub CST: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub CSOSN: Option<String>,
 
     // --- CÁLCULO ICMS NORMAL (CST 00, 10, 20, 51, 70, 90, Part) ---
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -157,8 +152,8 @@ pub struct Icms {
     // --- ICMS PARTILHA ---
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pBCOp: Option<Decimal>,
-    #[serde(rename = "UFST", skip_serializing_if = "Option::is_none")]
-    pub ufst: Option<UF>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub UFST: Option<UF>,
 
     // --- ICMS ST (REPASSE) ---
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -171,4 +166,35 @@ pub struct Icms {
     pub pCredSN: Option<Decimal>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vCredICMSSN: Option<Decimal>,
+}
+
+#[derive(Debug, Serialize)]
+pub enum TipoICMS {
+    ICMS00,
+    ICMS02,
+    ICMS10,
+    ICMS15,
+    ICMS20,
+    ICMS30,
+    ICMS40,
+    ICMS51,
+    ICMS53,
+    ICMS60,
+    ICMS61,
+    ICMS70,
+    ICMS90,
+    ICMSPART,
+    ICMSST,
+    ICMSSN101,
+    ICMSSN102,
+    ICMSSN201,
+    ICMSSN202,
+    ICMSSN500,
+    ICMSSN900,
+}
+
+impl Default for TipoICMS {
+    fn default() -> Self {
+        return Self::ICMS00
+    }
 }

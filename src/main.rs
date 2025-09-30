@@ -25,6 +25,7 @@ async fn main() {
     minio_client::init_client(&minio_variables);
     
     
+    
     let producer_variables: RabbitVariables = rabbitmq::initialize_variables("PRODUCER");
     let consumer_variables: RabbitVariables = rabbitmq::initialize_variables("CONSUMER");
     let connection_variables: RabbitVariables = producer_variables.clone();

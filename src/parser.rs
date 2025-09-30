@@ -26,7 +26,7 @@ async fn main() {
     //let object = String::from("NFCE33250800935769000100652010002482761002499990.xml");
     //let file: String = minio_client::download_object(&object, &minio_variables).await.expect("Failed to download file");
     //fs::write("./dump.xml", &file).expect("Failed to write dump.xml");
-    let file: String = fs::read_to_string("./data/Mod55.xml").unwrap();
+    let file: String = fs::read_to_string("./data/Mod65.xml").unwrap();
 
     println!("Download: {:?}", t2.elapsed());
     // medir tempo do parser
@@ -36,8 +36,16 @@ async fn main() {
     let mut parse_times: Vec<Duration> = Vec::new();
 
     for _ in 0..NUM_ITERATIONS {
+        let file: String = file.clone();
         let t_start = Instant::now();
-        let _json = nfe_parser::parse_nfe(file.clone(), 7, 2).unwrap();
+        match nfe_parser::parse_nfe(file, 7, 2) {
+            Ok(nfe) => {
+                
+            }
+            Err(e) => {
+                log::error!("Error: {}", e);
+            }
+        }
         parse_times.push(t_start.elapsed());
     }
 

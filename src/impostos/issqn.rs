@@ -19,5 +19,5 @@ pub struct ISSQN {
     pub cMun: Option<u32>,
     pub cPais: Option<String>,
     pub nProcesso: Option<String>,
-    pub indIncentivo: Option<u8>,
+    pub indIncentivo: u8,
 }
