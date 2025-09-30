@@ -1,25 +1,21 @@
 use std::{sync::{atomic::AtomicUsize, Arc}, thread::{self, ThreadId}};
 
 use amqprs::{
-    BasicProperties, Deliver,
     channel::{
-        BasicAckArguments, BasicConsumeArguments, Channel,
-    },
-    connection::{Connection, OpenConnectionArguments},
-    consumer::AsyncConsumer,
+        BasicAckArguments, BasicConsumeArguments, BasicPublishArguments, Channel
+    }, connection::Connection, consumer::AsyncConsumer, BasicProperties, Deliver
 };
 use async_trait::async_trait;
-use tokio::{sync::Mutex, time::{self, sleep}};
+use tokio::sync::Mutex;
 
+use crate::rabbitmq::{self, common::RabbitVariables};
 
-use crate::{rabbitmq::{self, RabbitVariables}};
 
 pub struct XmlConsumer {
     manual_ack: bool,
     producer_channels: Arc<Mutex<Vec<Channel>>>,
-    exchange_name: String,
-    routing_key: String,
     total_consumed: Arc<AtomicUsize>,
+    publish_args: BasicPublishArguments
 }
 
 pub struct RabbitMqConsumer {
@@ -53,11 +49,11 @@ impl RabbitMqConsumer {
     }
 
     async fn initialize_channels(&mut self) {
-        rabbitmq::initialize_channels(&self.rabbit_variables, &self.connection, &mut self.consumer_channels)
+        rabbitmq::common::initialize_channels(&self.rabbit_variables, &self.connection, &mut self.consumer_channels)
             .await;
 
         let mut producer_channels = self.producer_channels.lock().await;
-        rabbitmq::initialize_channels(&self.rabbit_variables, &self.connection, &mut producer_channels).await;
+        rabbitmq::common::initialize_channels(&self.rabbit_variables, &self.connection, &mut producer_channels).await;
 
     }
 
@@ -71,12 +67,12 @@ impl RabbitMqConsumer {
 
             let counter = self.total_consumed.clone();
             let producer_channels: Arc<Mutex<Vec<Channel>>> = self.producer_channels.clone();
+            let publish_args: BasicPublishArguments = BasicPublishArguments::new(&self.rabbit_variables.queue_name, &self.rabbit_variables.consumer);
             let consume: XmlConsumer = XmlConsumer { 
                 manual_ack: true,
                 total_consumed: counter,
-                producer_channels,
-                exchange_name: self.rabbit_variables.exchange_name.clone(),
-                routing_key: self.rabbit_variables.routing_key.clone()
+                producer_channels: producer_channels,
+                publish_args: publish_args.clone()
             };
             let tag = channel.basic_consume(consume, args).await;
 
@@ -96,7 +92,7 @@ impl RabbitMqConsumer {
 }
 
 impl XmlConsumer {
-    async fn publish (&self, message: usize ) -> bool {
+    async fn publish (&self, message: Vec<u8> ) -> bool {
         
         let channel = match self.get_publisher_channel().await {
             Some(ch) => ch,
@@ -104,9 +100,18 @@ impl XmlConsumer {
         };
 
         let json: String = "{\"body\": \"Hello, World!\"}".to_string();
-        
-        rabbitmq::publish(json, channel, &self.exchange_name, &self.routing_key).await;
-        log::info!("Successfully published message{message}");
+        let result = channel.basic_publish(
+            BasicProperties::default(), message, self.publish_args.clone()).await;
+
+        match result {
+            Ok(_) => return true,
+            Err(e) => {
+                log::error!("Failed to publish message: {}", e);
+                return false;
+            }
+        }
+
+        log::info!("Successfully published message");
         return true;
     }
 

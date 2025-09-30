@@ -1,7 +1,5 @@
 mod logger;
 mod rabbitmq;
-mod rabbitmq_producer;
-mod rabbitmq_consumer;
 mod minio_client;
 
 mod nfes;
@@ -12,8 +10,7 @@ use amqprs::connection::Connection;
 use dotenv::dotenv;
 use std::sync::{Arc};
 
-use crate::{minio_client::MinioVariables, rabbitmq::RabbitVariables, rabbitmq_consumer::RabbitMqConsumer};
-
+use crate::{minio_client::MinioVariables, rabbitmq::{common::{connect_rabbitmq, initialize_variables, RabbitVariables}, consumer::RabbitMqConsumer}};
 
 
 #[tokio::main]
@@ -26,12 +23,12 @@ async fn main() {
     
     
     
-    let producer_variables: RabbitVariables = rabbitmq::initialize_variables("PRODUCER");
-    let consumer_variables: RabbitVariables = rabbitmq::initialize_variables("CONSUMER");
+    let producer_variables: RabbitVariables = initialize_variables("PRODUCER");
+    let consumer_variables: RabbitVariables = initialize_variables("CONSUMER");
     let connection_variables: RabbitVariables = producer_variables.clone();
 
     // Initial connection
-    let mut connection: Arc<Connection> = rabbitmq::connect_rabbitmq(&producer_variables).await;
+    let mut connection: Arc<Connection> = connect_rabbitmq(&producer_variables).await;
     
     
     let mut consumer: RabbitMqConsumer = RabbitMqConsumer::new(
@@ -44,7 +41,7 @@ async fn main() {
 
     loop {
         if !connection.is_open() {
-            connection = rabbitmq::connect_rabbitmq(&connection_variables).await;
+            connection = connect_rabbitmq(&connection_variables).await;
             consumer.reset_connection(connection.clone());
         }
     }

@@ -11,6 +11,7 @@ pub struct COFINS {
 
 /// Representa a escolha principal do tipo de COFINS
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
 pub enum Tributacao {
     COFINSAliq(COFINSAliq),
     COFINSQtde(COFINSQtde),

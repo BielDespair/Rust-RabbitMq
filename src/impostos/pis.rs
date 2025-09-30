@@ -1,15 +1,18 @@
 #![allow(non_snake_case)]
+use std::default;
+
 use rust_decimal::Decimal;
 use serde::Serialize;
 
 #[derive(Debug, Default, Serialize)]
 pub struct PIS {
-    
+    pub tipo: TipoPis,
     #[serde(flatten)]
     pub tributacao: Tributacao,
 }
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
 pub enum Tributacao {
     PISAliq(PISAliq),
     PISQtde(PISQtde),
@@ -43,12 +46,15 @@ pub struct PISQtde {
 #[derive(Debug, Default, Serialize)]
 pub struct PISOutr {
     pub CST: String,
+
+    #[serde(flatten)]
     pub calculo: CalculoPISOutr,
     pub vPIS: Decimal
 }
 
 /// Enum para a escolha de cálculo DENTRO de PISOutr
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
 pub enum CalculoPISOutr {
     Aliquota {
         vBC: Decimal,
@@ -64,4 +70,13 @@ impl Default for CalculoPISOutr {
     fn default() -> Self {
         Self::Unidade { qBCProd: (Decimal::ZERO), vAliqProd: (Decimal::ZERO) }
     }
+}
+
+#[derive(Debug, Default, Serialize)]
+pub enum TipoPis {
+    PISAliq,
+    PISQtde,
+    #[default]
+    PISNT,
+    PISOutr,
 }

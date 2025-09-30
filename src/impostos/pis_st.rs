@@ -5,6 +5,8 @@ use serde::Serialize;
 
 #[derive(Debug, Default, Serialize)]
 pub struct PISST {
+
+    #[serde(flatten)]
     pub calculo: CalculoPisSt,
     pub vPIS: Decimal,
     pub indSomaPISST: Option<bool>,
@@ -12,6 +14,7 @@ pub struct PISST {
 
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
 pub enum CalculoPisSt {
     Aliquota {
         vBC: Decimal,

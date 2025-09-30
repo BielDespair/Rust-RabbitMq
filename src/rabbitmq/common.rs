@@ -145,6 +145,7 @@ pub async fn initialize_channels(
     }
 }
 
+
 pub async fn publish(
     content: String,
     channel: Channel,
