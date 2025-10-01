@@ -330,7 +330,7 @@ pub struct Emit {
 
 #[derive(Debug, Default, Serialize)]
 pub struct Avulsa {
-    pub CNPJ: Option<String>,
+    pub CNPJ: String,
     pub xOrgao: String,
     pub matr: String,
     pub xAgente: String,
@@ -348,8 +348,9 @@ pub struct Dest {
     #[serde(flatten)]
     pub EmitenteId: EmitenteId,
 
-    pub xNome: String,
-    pub enderDest: EnderEmi,
+    pub xNome: Option<String>,
+    pub enderDest: Option<EnderEmi>,
+    pub indIEDest: u8,
     pub IE: Option<String>,
     pub ISUF: Option<String>,
     pub IM: Option<String>,
@@ -367,7 +368,7 @@ pub struct EnderEmi {
     pub cMun: u32,
     pub xMun: String,
     pub UF: UF,
-    pub CEP: String,
+    pub CEP: Option<String>,
     pub cPais: Option<String>,
     pub xPais: Option<String>,
     pub fone: Option<String>

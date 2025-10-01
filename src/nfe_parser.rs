@@ -26,7 +26,7 @@ use crate::{
         pis::{self, CalculoPISOutr, PISAliq, PISOutr, PISQtde, TipoPis, PIS},
         pis_st::{CalculoPisSt, PISST},
     }, nfes::{
-        Adi, Arma, Cide, Combustivel, CompraGov, Det, DetExport, Emit, EmitenteId, Encerrante, EnderEmi, ExportInd, GCred, Ide, Imposto, InfProdEmb, InfProdNFF, Medicamento, NFRef, NFe, NfeJson, OrigComb, Prod, ProdutoEspecifico, RefECFData, RefNFData, RefNFPData, Tributacao, Veiculo, DI, UF
+        Adi, Arma, Avulsa, Cide, Combustivel, CompraGov, Dest, Det, DetExport, Emit, EmitenteId, Encerrante, EnderEmi, ExportInd, GCred, Ide, Imposto, InfProdEmb, InfProdNFF, Local, Medicamento, NFRef, NFe, NfeJson, OrigComb, Prod, ProdutoEspecifico, RefECFData, RefNFData, RefNFPData, Tributacao, Veiculo, DI, UF
     }
 };
 
@@ -148,7 +148,11 @@ fn parse_nfeProc_65(reader: &mut XmlReader) -> Result<NFe, Box<dyn Error>> {
                 b"infNFe" => nfe.Id = get_nfe_id(&e)?,
                 b"ide" => nfe.ide = parse_ide(reader)?,
                 b"emit" => nfe.emit = parse_emit(reader)?,
+                b"avulsa" => nfe.avulsa = Some(parse_avulsa(reader)?),
                 b"det" => nfe.produtos.push(parse_det(reader)?),
+                b"dest" => nfe.dest = Some(parse_dest(reader)?),
+                b"retirada" => nfe.retirada = Some(parse_TLocal(reader, b"retirada")?),
+                b"entrega" => nfe.entrega = Some(parse_TLocal(reader, b"entrega")?),
                 _ => {}
             },
 
@@ -254,7 +258,7 @@ fn parse_emit(reader: &mut XmlReader) -> Result<Emit, Box<dyn Error>> {
     loop {
         match reader.read_event() {
             Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"enderEmit" => emit.enderEmit = parse_enderEmit(reader)?,
+                b"enderEmit" => emit.enderEmit = parse_enderEmit(reader, b"enderEmit")?,
 
                 name => {
                     let txt: String = read_text_string(reader, &e)?;
@@ -287,6 +291,73 @@ fn parse_emit(reader: &mut XmlReader) -> Result<Emit, Box<dyn Error>> {
         }
     }
     panic!("Unexpected error while parsing emit.")
+}
+
+fn parse_avulsa(reader: &mut XmlReader) -> Result<Avulsa, Box<dyn Error>> {
+    let mut avulsa = Avulsa::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"CNPJ" => avulsa.CNPJ = txt,
+                    b"xOrgao" => avulsa.xOrgao = txt,
+                    b"matr" => avulsa.matr = txt,
+                    b"xAgente" => avulsa.xAgente = txt,
+                    b"fone" => avulsa.fone = Some(txt),
+                    b"UF" => avulsa.UF = UF::from(txt.as_str()),
+                    b"nDAR" => avulsa.nDAR = Some(txt),
+                    b"dEmi" => avulsa.dEmi = Some(txt),
+                    b"vDAR" => avulsa.vDAR = Some(txt.parse()?),
+                    b"repEmi" => avulsa.repEmi = txt,
+                    b"dPag" => avulsa.dPag = Some(txt),
+                    tag => {
+                        log::warn!("Elemento <avulsa> não mapeado: {}", String::from_utf8_lossy(tag));
+                    }
+                }
+            },
+            Ok(Event::End(e)) if e.name().as_ref() == b"avulsa" => {
+                return Ok(avulsa);
+            },
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("avulsa".to_string()))),
+            _ => {},
+        }
+    }
+}
+
+fn parse_dest(reader: &mut XmlReader) -> Result<Dest, Box<dyn Error>> {
+    let mut dest: Dest = Dest::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                // Delegação para o sub-parser de endereço
+                b"enderDest" => dest.enderDest = Some(parse_enderEmit(reader, b"enderDest")?),
+
+                // Tratamento dos campos finais
+                name => {
+                    let txt = read_text_string(reader, &e)?;
+                    match name {
+                        // Tratamento da <choice> de identificação
+                        b"CNPJ" => dest.EmitenteId = EmitenteId::CNPJ(txt),
+                        b"CPF" => dest.EmitenteId = EmitenteId::CPF(txt),
+                        b"idEstrangeiro" => dest.EmitenteId = EmitenteId::idEstrangeiro(txt),
+
+                        // Outros campos
+                        b"xNome" => dest.xNome = Some(txt),
+                        b"indIEDest" => dest.indIEDest = txt.parse::<u8>()?,
+                        b"IE" => dest.IE = Some(txt),
+                        b"ISUF" => dest.ISUF = Some(txt),
+                        b"IM" => dest.IM = Some(txt),
+                        b"email" => dest.email = Some(txt),
+                        _ => (),
+                    }
+                }
+            },
+            Ok(Event::End(e)) if e.name().as_ref() == b"dest" => return Ok(dest),
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("dest".to_string()))),
+            _ => (),
+        }
+    }
 }
 
 fn parse_det(reader: &mut XmlReader) -> Result<Det, Box<dyn Error>> {
@@ -2179,7 +2250,7 @@ fn parse_IPITrib(reader: &mut XmlReader) -> Result<IPITrib, Box<dyn Error>> {
     }
 }
 
-fn parse_enderEmit(reader: &mut XmlReader) -> Result<EnderEmi, Box<dyn Error>> {
+fn parse_enderEmit(reader: &mut XmlReader, end_tag: &[u8]) -> Result<EnderEmi, Box<dyn Error>> {
     let mut enderEmi: EnderEmi = EnderEmi::default();
     loop {
         match reader.read_event() {
@@ -2195,7 +2266,7 @@ fn parse_enderEmit(reader: &mut XmlReader) -> Result<EnderEmi, Box<dyn Error>> {
                     b"cMun" => enderEmi.cMun = txt.parse::<u32>()?,
                     b"xMun" => enderEmi.xMun = txt,
                     b"UF" => enderEmi.UF = UF::from(txt.as_str()),
-                    b"CEP" => enderEmi.CEP = txt,
+                    b"CEP" => enderEmi.CEP = Some(txt),
                     b"cPais" => enderEmi.cPais = Some(txt),
                     b"xPais" => enderEmi.xPais = Some(txt),
                     b"fone" => enderEmi.fone = Some(txt),
@@ -2203,12 +2274,50 @@ fn parse_enderEmit(reader: &mut XmlReader) -> Result<EnderEmi, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"enderEmit" => return Ok(enderEmi),
+            Ok(Event::End(e)) if e.name().as_ref() == end_tag => return Ok(enderEmi),
 
             Ok(Event::Eof) => {
-                return Err(Box::new(ParseError::UnexpectedEof("EnderEmi".to_string())));
+                return Err(Box::new(ParseError::UnexpectedEof(String::from_utf8_lossy(end_tag).to_string())));
             }
             _ => {}
+        }
+    }
+}
+
+fn parse_TLocal(reader: &mut XmlReader, end_tag: &[u8]) -> Result<Local, Box<dyn Error>> {
+    let mut local = Local::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    // Tratamento da <choice> de identificação
+                    b"CNPJ" => local.EmitenteId = EmitenteId::CNPJ(txt),
+                    b"CPF" => local.EmitenteId = EmitenteId::CPF(txt),
+
+
+                    // Outros campos
+                    b"xNome" => local.xNome = Some(txt),
+                    b"xLgr" => local.xLgr = txt,
+                    b"nro" => local.nro = txt,
+                    b"xCpl" => local.xCpl = Some(txt),
+                    b"xBairro" => local.xBairro = txt,
+                    b"cMun" => local.cMun = txt.parse()?,
+                    b"xMun" => local.xMun = txt,
+                    b"UF" => local.UF = UF::from(txt.as_str()),
+                    b"CEP" => local.CEP = Some(txt),
+                    b"cPais" => local.cPais = Some(txt),
+                    b"xPais" => local.xPais = Some(txt),
+                    b"fone" => local.fone = Some(txt),
+                    b"email" => local.email = Some(txt),
+                    b"IE" => local.IE = Some(txt),
+                    _ => (),
+                }
+            }
+            // Usa o argumento 'end_tag' para a condição de parada
+            Ok(Event::End(e)) if e.name().as_ref() == end_tag => return Ok(local),
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof(String::from_utf8_lossy(end_tag).to_string()))),
+            _ => (),
         }
     }
 }
