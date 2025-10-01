@@ -5,6 +5,7 @@ use serde::Serialize;
 /// Estrutura principal que representa a tag <COFINS>
 #[derive(Debug, Default, Serialize)]
 pub struct COFINS {
+    pub tipo: TipoCofins,
     #[serde(flatten)]
     pub tributacao: Tributacao,
 }
@@ -22,6 +23,20 @@ pub enum Tributacao {
 impl Default for Tributacao {
     fn default() -> Self {
         Self::COFINSNT { CST: (String::new()) }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub enum TipoCofins {
+    COFINSAliq,
+    COFINSQtde,
+    COFINSNT,
+    COFINSOutr
+}
+
+impl Default for TipoCofins {
+    fn default() -> Self {
+        Self::COFINSNT
     }
 }
 
@@ -57,6 +72,7 @@ pub struct COFINSOutr {
 
 /// Enum para a escolha de cálculo DENTRO de COFINSOutr
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
 pub enum CalculoCOFINSOutr {
     Aliquota {
         vBC: Decimal,

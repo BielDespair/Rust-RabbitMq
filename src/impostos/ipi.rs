@@ -12,11 +12,13 @@ pub struct Ipi {
     pub qSelo: Option<String>,
     pub cEnq: String,
 
+    #[serde(flatten)]
     pub Tributacao: Tributacao,
 }
 
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
 pub enum Tributacao {
     IPITrib(IPITrib),
     IPINT {CST: String}
@@ -39,6 +41,7 @@ pub struct IPITrib {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
 pub enum CalculoIpi  {
     Aliquota  {
         vBC: Decimal,

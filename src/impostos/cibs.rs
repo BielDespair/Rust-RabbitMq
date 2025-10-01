@@ -85,7 +85,6 @@ pub struct GIBSUF {
     pub vIBSUF: Decimal,
 }
 
-#[allow(non_snake_case)]
 #[derive(Debug, Default, Serialize)]
 pub struct GIBSMun {
     pub pIBSMun: Decimal,
@@ -95,7 +94,6 @@ pub struct GIBSMun {
     pub vIBSMun: Decimal,
 }
 
-#[allow(non_snake_case)]
 #[derive(Debug, Default, Serialize)]
 pub struct GCBS {
     pub pCBS: Decimal,

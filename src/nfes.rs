@@ -2,7 +2,7 @@
 use rust_decimal::Decimal;
 use serde::{Serialize};
 
-use crate::impostos::{cofins::COFINS, cofins_st::COFINSST, ibs_cbs::IBSCBS, icms::Icms, icms_uf_dest::ICMSUFDest, ii::Ii, ipi::{Ipi}, is::IS, issqn::ISSQN, pis::PIS, pis_st::PISST};
+use crate::{det::impostoDevol::ImpostoDevol, impostos::{cofins::COFINS, cofins_st::COFINSST, ibs_cbs::IBSCBS, icms::Icms, icms_uf_dest::ICMSUFDest, ii::Ii, ipi::Ipi, is::IS, issqn::ISSQN, pis::PIS, pis_st::PISST}};
 
 
 
@@ -28,7 +28,10 @@ pub struct NFe {
 #[derive(Debug, Default, Serialize)]
 pub struct Det {
     pub produto: Prod,
-    pub imposto: Imposto
+    pub imposto: Imposto,
+    pub impostoDevol: Option<ImpostoDevol>,
+    pub infAdProd: Option<String>,
+    pub vItem: Option<Decimal>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -230,6 +233,8 @@ pub struct DI {
     pub tpViaTransp: u8,
     pub vAFRMM: Option<Decimal>,
     pub tpIntermedio: u8,
+
+    #[serde(flatten)]
     pub EmitenteId: EmitenteId,
     pub UFTerceiro: Option<UF>,
     pub cExportador: Option<String>,

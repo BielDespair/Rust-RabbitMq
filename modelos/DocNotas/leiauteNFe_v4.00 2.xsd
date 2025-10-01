@@ -5563,13 +5563,15 @@ Operação interestadual para consumidor final com partilha do ICMS  devido na o
 								<xs:sequence>
 									<xs:element name="modFrete">
 										<xs:annotation>
-											<xs:documentation>Modalidade do frete
-0- Contratação do Frete por conta do Remetente (CIF);
-1- Contratação do Frete por conta do destinatário/remetente (FOB);
-2- Contratação do Frete por conta de terceiros;
-3- Transporte próprio por conta do remetente;
-4- Transporte próprio por conta do destinatário;
-9- Sem Ocorrência de transporte.</xs:documentation>
+											<xs:documentation>
+												Modalidade do frete
+												0- Contratação do Frete por conta do Remetente (CIF);
+												1- Contratação do Frete por conta do destinatário/remetente (FOB);
+												2- Contratação do Frete por conta de terceiros;
+												3- Transporte próprio por conta do remetente;
+												4- Transporte próprio por conta do destinatário;
+												9- Sem Ocorrência de transporte.
+											</xs:documentation>
 										</xs:annotation>
 										<xs:simpleType>
 											<xs:restriction base="xs:string">

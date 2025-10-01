@@ -8,6 +8,7 @@ mod nfes;
 mod nfe_parser;
 mod minio_client;
 mod impostos;
+mod det;
 
 #[tokio::main]
 async fn main() {
@@ -40,7 +41,6 @@ async fn main() {
         let t_start = Instant::now();
         match nfe_parser::parse_nfe(file, 7, 2) {
             Ok(nfe) => {
-                
             }
             Err(e) => {
                 log::error!("Error: {}", e);

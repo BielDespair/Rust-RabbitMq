@@ -13,6 +13,7 @@ pub struct COFINSST {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
 pub enum CalculoCofinsSt {
     /// Cálculo por valor (Base de Cálculo x Alíquota).
     Aliquota {

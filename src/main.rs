@@ -4,6 +4,7 @@ mod minio_client;
 
 mod nfes;
 mod impostos;
+mod det;
 
 
 use amqprs::connection::Connection;

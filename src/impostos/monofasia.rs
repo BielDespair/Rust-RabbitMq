@@ -47,4 +47,3 @@ pub struct GMonoDif {
     pub pDifCBS: Decimal,
     pub vCBSMonoDif: Decimal,
 }
-

@@ -5,26 +5,29 @@ use std::{error::Error, fmt};
 use quick_xml::{
     Reader,
     events::{BytesStart, Event},
-    name::QName,
 };
 use rust_decimal::Decimal;
 
 use crate::{
-    impostos::{
-        cofins::{self, COFINS, COFINSAliq, COFINSOutr, COFINSQtde, CalculoCOFINSOutr},
+    det::impostoDevol::{ImpostoDevol, IpiDevol}, impostos::{
+        cibs::{
+            GIBSMun, TCredPres, TDevTrib, TDif, TRed, TTribCompraGov, TTribRegular, ValorCredPres, GCBS, GIBSUF, TCIBS
+        },
+        cofins::{self, COFINSAliq, COFINSOutr, COFINSQtde, CalculoCOFINSOutr, TipoCofins, COFINS},
+        cofins_st::{CalculoCofinsSt, COFINSST},
+        ibs_cbs::{TCredPresIBSZFM, TTransfCred, TributacaoIBS, IBSCBS},
         icms::{Icms, TipoICMS},
+        icms_uf_dest::ICMSUFDest,
         ii::Ii,
         ipi::{self, CalculoIpi, IPITrib, Ipi},
+        is::{CalculoIS, UnidadeTributavel, IS},
         issqn::ISSQN,
-        pis::{self, CalculoPISOutr, PIS, PISAliq, PISOutr, PISQtde, TipoPis},
+        monofasia::{GMonoDif, GMonoPadrao, GMonoRet, GMonoReten, TMonofasia},
+        pis::{self, CalculoPISOutr, PISAliq, PISOutr, PISQtde, TipoPis, PIS},
         pis_st::{CalculoPisSt, PISST},
-    },
-    nfes::{
-        Adi, Arma, Cide, Combustivel, CompraGov, DI, Det, DetExport, Emit, EmitenteId, Encerrante,
-        EnderEmi, ExportInd, GCred, Ide, Imposto, InfProdEmb, InfProdNFF, Medicamento, NFRef, NFe,
-        NfeJson, OrigComb, Prod, ProdutoEspecifico, RefECFData, RefNFData, RefNFPData, Tributacao,
-        UF, Veiculo,
-    },
+    }, nfes::{
+        Adi, Arma, Cide, Combustivel, CompraGov, Det, DetExport, Emit, EmitenteId, Encerrante, EnderEmi, ExportInd, GCred, Ide, Imposto, InfProdEmb, InfProdNFF, Medicamento, NFRef, NFe, NfeJson, OrigComb, Prod, ProdutoEspecifico, RefECFData, RefNFData, RefNFPData, Tributacao, Veiculo, DI, UF
+    }
 };
 
 type XmlReader<'a> = Reader<&'a [u8]>;
@@ -295,7 +298,17 @@ fn parse_det(reader: &mut XmlReader) -> Result<Det, Box<dyn Error>> {
                 b"prod" => det.produto = parse_prod(reader)?,
 
                 b"imposto" => det.imposto = parse_imposto(reader)?,
-                _ => {}
+                b"impostoDevol" => det.impostoDevol = Some(parse_impostoDevol(reader)?),
+                name => {
+                    let txt: String = read_text_string(reader, &e)?;
+                    match name {
+                        b"infAdProd" => det.infAdProd = Some(txt),
+                        b"vItem" => det.vItem = Some(txt.parse::<Decimal>()?),
+                        tag => {
+                            log::warn!("Elemento PIS não mapeado: {}", String::from_utf8_lossy(tag));
+                        }
+                    }
+                }
             },
 
             Ok(Event::End(e)) if e.name().as_ref() == b"det" => return Ok(det),
@@ -322,6 +335,7 @@ fn parse_prod(reader: &mut XmlReader) -> Result<Prod, Box<dyn Error>> {
                     .get_or_insert_default()
                     .push(parse_detExport(reader)?),
                 b"infProdNFF" => prod.infProdNFF = Some(parse_infProdNFF(reader)?),
+                b"infProdEmb" => prod.infProdEmb = Some(parse_infProdEmb(reader)?),
                 b"veicProd" => {
                     prod.especifico = Some(ProdutoEspecifico::veicProd(parse_veicProd(reader)?))
                 }
@@ -804,6 +818,10 @@ fn parse_imposto(reader: &mut XmlReader) -> Result<Imposto, Box<dyn Error>> {
                 b"PIS" => imposto.PIS = Some(parse_PIS(reader)?),
                 b"PISST" => imposto.PISST = Some(parse_PISST(reader)?),
                 b"COFINS" => imposto.COFINS = Some(parse_COFINS(reader)?),
+                b"COFINSST" => imposto.COFINSST = Some(parse_COFINSST(reader)?),
+                b"ICMSUFDest" => imposto.ICMSUFDest = Some(parse_ICMSUFDest(reader)?),
+                b"IS" => imposto.IS = Some(parse_IS(reader)?),
+                b"IBSCBS" => imposto.IBSCBS = Some(parse_IBSCBS(reader)?),
 
                 name => {
                     let txt: String = read_text_string(reader, &e)?;
@@ -835,6 +853,44 @@ fn parse_imposto(reader: &mut XmlReader) -> Result<Imposto, Box<dyn Error>> {
             }
 
             _ => {}
+        }
+    }
+}
+
+fn parse_impostoDevol(reader: &mut XmlReader) -> Result<ImpostoDevol, Box<dyn Error>> {
+    let mut imposto_devol = ImpostoDevol::default();
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"IPI" => imposto_devol.IPI = parse_IpiDevol(reader)?,
+                // Trata os campos que são filhos diretos
+                name => {
+                    let txt = read_text_string(reader, &e)?;
+                    match name {
+                        b"pDevol" => imposto_devol.pDevol = txt.parse()?,
+                        _ => (),
+                    }
+                }
+            },
+
+            Ok(Event::End(e)) if e.name().as_ref() == b"impostoDevol" => return Ok(imposto_devol),
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("impostoDevol".to_string()))),
+            _ => (),
+        }
+    }
+}
+
+fn parse_IpiDevol(reader: &mut XmlReader) -> Result<IpiDevol, Box<dyn Error>> {
+    let mut ipi_devol: IpiDevol = IpiDevol::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"vIPIDevol" => ipi_devol.vIPIDevol = read_text_string(reader, &e)?.parse()?,
+            
+            Ok(Event::End(e)) if e.name().as_ref() == b"IPI" => return Ok(ipi_devol),
+            
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("IPI em impostoDevol".to_string()))),
+            _ => (),
         }
     }
 }
@@ -1171,19 +1227,33 @@ fn parse_PISST(reader: &mut XmlReader) -> Result<PISST, Box<dyn Error>> {
     }
 }
 
-#[allow(non_snake_case)]
 fn parse_COFINS(reader: &mut XmlReader) -> Result<COFINS, Box<dyn Error>> {
     let mut COFINS: COFINS = COFINS::default();
     loop {
         match reader.read_event() {
             Ok(Event::Start(e)) => {
                 match e.name().as_ref() {
-                    b"COFINSAliq" => COFINS.tributacao = cofins::Tributacao::COFINSAliq(parse_COFINSAliq(reader)?),
-                    b"COFINSQtde" => COFINS.tributacao = cofins::Tributacao::COFINSQtde(parse_COFINSQtde(reader)?),
-                    b"COFINSOutr" => COFINS.tributacao = cofins::Tributacao::COFINSOutr(parse_COFINSOutr(reader)?),
-                    b"COFINSNT" => COFINS.tributacao =  cofins::Tributacao::COFINSNT {
-                        CST: parse_COFINSNT(reader)?,
-                    },
+                    b"COFINSAliq" => {
+                        COFINS.tipo = TipoCofins::COFINSAliq;
+                        COFINS.tributacao =
+                            cofins::Tributacao::COFINSAliq(parse_COFINSAliq(reader)?);
+                    }
+                    b"COFINSQtde" => {
+                        COFINS.tipo = TipoCofins::COFINSQtde;
+                        COFINS.tributacao =
+                            cofins::Tributacao::COFINSQtde(parse_COFINSQtde(reader)?)
+                    }
+                    b"COFINSOutr" => {
+                        COFINS.tipo = TipoCofins::COFINSOutr;
+                        COFINS.tributacao =
+                            cofins::Tributacao::COFINSOutr(parse_COFINSOutr(reader)?)
+                    }
+                    b"COFINSNT" => {
+                        COFINS.tipo = TipoCofins::COFINSNT;
+                        COFINS.tributacao = cofins::Tributacao::COFINSNT {
+                            CST: parse_COFINSNT(reader)?,
+                        }
+                    }
 
                     tag => {
                         let tag_name = String::from_utf8_lossy(tag).to_string();
@@ -1197,6 +1267,632 @@ fn parse_COFINS(reader: &mut XmlReader) -> Result<COFINS, Box<dyn Error>> {
             Ok(Event::Eof) => {
                 return Err(Box::new(ParseError::UnexpectedEof("COFINS".to_string())));
             }
+            _ => (),
+        }
+    }
+}
+
+fn parse_COFINSST(reader: &mut XmlReader) -> Result<COFINSST, Box<dyn Error>> {
+    let mut cofins_st = COFINSST::default();
+
+    // Variáveis temporárias para os campos do enum
+    let mut vBC: Option<Decimal> = None;
+    let mut pCOFINS: Option<Decimal> = None;
+    let mut qBCProd: Option<Decimal> = None;
+    let mut vAliqProd: Option<Decimal> = None;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    // Campos diretos da struct
+                    b"vCOFINS" => cofins_st.vCOFINS = txt.parse()?,
+                    b"indSomaCOFINSST" => cofins_st.indSomaCOFINSST = Some(txt.parse::<u8>()?),
+
+                    // Campos do enum armazenados temporariamente
+                    b"vBC" => vBC = Some(txt.parse()?),
+                    b"pCOFINS" => pCOFINS = Some(txt.parse()?),
+                    b"qBCProd" => qBCProd = Some(txt.parse()?),
+                    b"vAliqProd" => vAliqProd = Some(txt.parse()?),
+
+                    tag => {
+                        let tag_name = String::from_utf8_lossy(tag).to_string();
+                        log::warn!("Elemento COFINSST não mapeado: {}", tag_name);
+                    }
+                }
+            }
+
+            Ok(Event::End(e)) if e.name().as_ref() == b"COFINSST" => {
+                // Decide e constrói o enum com base nos campos coletados
+                if let (Some(vbc_val), Some(pcofins_val)) = (vBC, pCOFINS) {
+                    cofins_st.calculo = CalculoCofinsSt::Aliquota {
+                        vBC: vbc_val,
+                        pCOFINS: pcofins_val,
+                    };
+                } else if let (Some(qbc_val), Some(valiq_val)) = (qBCProd, vAliqProd) {
+                    cofins_st.calculo = CalculoCofinsSt::Unidade {
+                        qBCProd: qbc_val,
+                        vAliqProd: valiq_val,
+                    };
+                } else {
+                    return Err("Estrutura de cálculo do COFINSST inválida.".into());
+                }
+
+                return Ok(cofins_st);
+            }
+
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof("COFINSST".to_string())));
+            }
+            _ => {}
+        }
+    }
+}
+
+fn parse_ICMSUFDest(reader: &mut XmlReader) -> Result<ICMSUFDest, Box<dyn Error>> {
+    let mut icms_uf_dest: ICMSUFDest = ICMSUFDest::default();
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"vBCUFDest" => icms_uf_dest.vBCUFDest = txt.parse()?,
+                    b"vBCFCPUFDest" => icms_uf_dest.vBCFCPUFDest = Some(txt.parse()?),
+                    b"pFCPUFDest" => icms_uf_dest.pFCPUFDest = Some(txt.parse()?),
+                    b"pICMSUFDest" => icms_uf_dest.pICMSUFDest = txt.parse()?,
+                    b"pICMSInter" => icms_uf_dest.pICMSInter = txt,
+                    b"pICMSInterPart" => icms_uf_dest.pICMSInterPart = txt.parse()?,
+                    b"vFCPUFDest" => icms_uf_dest.vFCPUFDest = Some(txt.parse()?),
+                    b"vICMSUFDest" => icms_uf_dest.vICMSUFDest = txt.parse()?,
+                    b"vICMSUFRemet" => icms_uf_dest.vICMSUFRemet = txt.parse()?,
+                    tag => {
+                        let tag_name = String::from_utf8_lossy(tag).to_string();
+                        log::warn!("Elemento ICMSUFDest não mapeado: {}", tag_name);
+                    }
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"ICMSUFDest" => {
+                return Ok(icms_uf_dest);
+            }
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof(
+                    "ICMSUFDest".to_string(),
+                )));
+            }
+            _ => {}
+        }
+    }
+}
+
+fn parse_IS(reader: &mut XmlReader) -> Result<IS, Box<dyn Error>> {
+    let mut is = IS::default();
+
+    // Variáveis temporárias para todos os campos dos blocos opcionais
+    let mut vBCIS: Option<Decimal> = None;
+    let mut pIS: Option<Decimal> = None;
+    let mut pISEspec: Option<Decimal> = None;
+    let mut uTrib: Option<String> = None;
+    let mut qTrib: Option<Decimal> = None;
+    let mut vIS: Option<Decimal> = None;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"CSTIS" => is.CSTIS = txt,
+                    b"cClassTribIS" => is.cClassTribIS = txt,
+                    b"vBCIS" => vBCIS = Some(txt.parse()?),
+                    b"pIS" => pIS = Some(txt.parse()?),
+                    b"pISEspec" => pISEspec = Some(txt.parse()?),
+                    b"uTrib" => uTrib = Some(txt),
+                    b"qTrib" => qTrib = Some(txt.parse()?),
+                    b"vIS" => vIS = Some(txt.parse()?),
+
+                    tag => {
+                        let tag_name = String::from_utf8_lossy(tag).to_string();
+                        log::warn!("Elemento IS não mapeado: {}", tag_name);
+                    }
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"IS" => {
+                if let (Some(vbc), Some(pis_val), Some(vis_val)) = (vBCIS, pIS, vIS) {
+                    let unidade_tributavel =
+                        if let (Some(utrib_val), Some(qtrib_val)) = (uTrib, qTrib) {
+                            Some(UnidadeTributavel {
+                                uTrib: utrib_val,
+                                qTrib: qtrib_val,
+                            })
+                        } else {
+                            None
+                        };
+
+                    is.calculo = Some(CalculoIS {
+                        vBCIS: vbc,
+                        pIS: pis_val,
+                        pISEspec,
+                        unidade_tributavel,
+                        vIS: vis_val,
+                    });
+                }
+                return Ok(is);
+            }
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("IS".to_string()))),
+            _ => {}
+        }
+    }
+}
+
+fn parse_IBSCBS(reader: &mut XmlReader) -> Result<IBSCBS, Box<dyn Error>> {
+    let mut ibscbs = IBSCBS::default();
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                match e.name().as_ref() {
+                    // --- Sub-contêineres (delega para outras funções) ---
+                    b"gIBSCBS" => {
+                        ibscbs.tributacao = Some(TributacaoIBS::gIBSCBS(parse_gIBSCBS(reader)?))
+                    }
+                    b"gIBSCBSMono" => {
+                        ibscbs.tributacao =
+                            Some(TributacaoIBS::gIBSCBSMono(parse_gIBSCBSMono(reader)?))
+                    }
+                    b"gTransfCred" => {
+                        ibscbs.tributacao =
+                            Some(TributacaoIBS::gTransfCred(parse_gTransfCred(reader)?))
+                    }
+                    b"gCredPresIBSZFM" => {
+                        ibscbs.gCredPresIBSZFM = Some(parse_gCredPresIBSZFM(reader)?)
+                    }
+
+                    // --- Campos finais ---
+                    name => {
+                        let txt = read_text_string(reader, &e)?;
+                        match name {
+                            b"CST" => ibscbs.CST = txt,
+                            b"cClassTrib" => ibscbs.cClassTrib = txt,
+                            tag => {
+                                let tag_name = String::from_utf8_lossy(tag).to_string();
+                                log::warn!("Elemento IBSCBS não mapeado: {}", tag_name);
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"IBSCBS" => {
+                return Ok(ibscbs);
+            }
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof("IBSCBS".to_string())));
+            }
+            _ => {}
+        }
+    }
+}
+
+fn parse_gIBSCBS(reader: &mut XmlReader) -> Result<TCIBS, Box<dyn Error>> {
+    let mut tcibs: TCIBS = TCIBS::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"gIBSUF" => tcibs.gIBSUF = parse_gIBSUF(reader)?,
+                b"gIBSMun" => tcibs.gIBSMun = parse_gIBSMun(reader)?,
+                b"gCBS" => tcibs.gCBS = parse_gCBS(reader)?,
+                b"gTribRegular" => tcibs.gTribRegular = Some(parse_gTribRegular(reader)?),
+                b"gIBSCredPres" => tcibs.gIBSCredPres = Some(parse_gCredPres(reader, b"gIBSCredPres")?),
+                b"gCBSCredPres" => tcibs.gCBSCredPres = Some(parse_gCredPres(reader, b"gCBSCredPres")?),
+                b"gTribCompraGov" => tcibs.gTribCompraGov = Some(parse_gTribCompraGov(reader)?),
+                name => {
+                    let txt = read_text_string(reader, &e)?;
+                    match name {
+                        b"vBC" => tcibs.vBC = txt.parse()?,
+                        b"vIBS" => tcibs.vIBS = txt.parse()?,
+                        _ => (),
+                    }
+                }
+            },
+            Ok(Event::End(e)) if e.name().as_ref() == b"gIBSCBS" => return Ok(tcibs),
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof("gIBSCBS".to_string())));
+            }
+            _ => (),
+        }
+    }
+}
+
+fn parse_gIBSUF(reader: &mut XmlReader) -> Result<GIBSUF, Box<dyn Error>> {
+    let mut g: GIBSUF = GIBSUF::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"gDif" => g.gDif = Some(parse_gDif(reader)?),
+                b"gDevTrib" => g.gDevTrib = Some(parse_gDevTrib(reader)?),
+                b"gRed" => g.gRed = Some(parse_gRed(reader)?),
+                name => {
+                    let txt = read_text_string(reader, &e)?;
+                    match name {
+                        b"pIBSUF" => g.pIBSUF = txt.parse()?,
+                        b"vIBSUF" => g.vIBSUF = txt.parse()?,
+                        _ => (),
+                    }
+                }
+            },
+            Ok(Event::End(e)) if e.name().as_ref() == b"gIBSUF" => return Ok(g),
+
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof("gIBSUF".to_string())));
+            }
+            _ => (),
+        }
+    }
+}
+
+fn parse_gIBSMun(reader: &mut XmlReader) -> Result<GIBSMun, Box<dyn Error>> {
+    let mut g = GIBSMun::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"gDif" => g.gDif = Some(parse_gDif(reader)?),
+                b"gDevTrib" => g.gDevTrib = Some(parse_gDevTrib(reader)?),
+                b"gRed" => g.gRed = Some(parse_gRed(reader)?),
+                name => {
+                    let txt = read_text_string(reader, &e)?;
+                    match name {
+                        b"pIBSMun" => g.pIBSMun = txt.parse()?,
+                        b"vIBSMun" => g.vIBSMun = txt.parse()?,
+                        _ => (),
+                    }
+                }
+            },
+            Ok(Event::End(e)) if e.name().as_ref() == b"gIBSMun" => return Ok(g),
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof("gIBSMun".to_string())));
+            }
+
+            _ => (),
+        }
+    }
+}
+
+fn parse_gCBS(reader: &mut XmlReader) -> Result<GCBS, Box<dyn Error>> {
+    let mut g = GCBS::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"gDif" => g.gDif = Some(parse_gDif(reader)?),
+                b"gDevTrib" => g.gDevTrib = Some(parse_gDevTrib(reader)?),
+                b"gRed" => g.gRed = Some(parse_gRed(reader)?),
+                name => {
+                    let txt = read_text_string(reader, &e)?;
+                    match name {
+                        b"pCBS" => g.pCBS = txt.parse()?,
+                        b"vCBS" => g.vCBS = txt.parse()?,
+                        _ => (),
+                    }
+                }
+            },
+            Ok(Event::End(e)) if e.name().as_ref() == b"gCBS" => return Ok(g),
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gCBS".to_string()))),
+            _ => (),
+        }
+    }
+}
+
+fn parse_gTribRegular(reader: &mut XmlReader) -> Result<TTribRegular, Box<dyn Error>> {
+    let mut g: TTribRegular = TTribRegular::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"CSTReg" => g.CSTReg = txt,
+                    b"cClassTribReg" => g.cClassTribReg = txt,
+                    b"pAliqEfetRegIBSUF" => g.pAliqEfetRegIBSUF = txt.parse()?,
+                    b"vTribRegIBSUF" => g.vTribRegIBSUF = txt.parse()?,
+                    b"pAliqEfetRegIBSMun" => g.pAliqEfetRegIBSMun = txt.parse()?,
+                    b"vTribRegIBSMun" => g.vTribRegIBSMun = txt.parse()?,
+                    b"pAliqEfetRegCBS" => g.pAliqEfetRegCBS = txt.parse()?,
+                    b"vTribRegCBS" => g.vTribRegCBS = txt.parse()?,
+                    _ => (),
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"gTribRegular" => return Ok(g),
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof(
+                    "gTribRegular".to_string(),
+                )));
+            }
+            _ => (),
+        }
+    }
+}
+
+fn parse_gDif(reader: &mut XmlReader) -> Result<TDif, Box<dyn Error>> {
+    let mut g = TDif::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"pDif" => g.pDif = txt.parse()?,
+                    b"vDif" => g.vDif = txt.parse()?,
+                    _ => (),
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"gDif" => return Ok(g),
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gDif".to_string()))),
+
+            _ => (),
+        }
+    }
+}
+
+fn parse_gDevTrib(reader: &mut XmlReader) -> Result<TDevTrib, Box<dyn Error>> {
+    let mut g: TDevTrib = TDevTrib::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"vDevTrib" => {
+                g.vDevTrib = read_text_string(reader, &e)?.parse()?;
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"gDevTrib" => return Ok(g),
+
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof("gDevTrib".to_string())));
+            }
+            _ => (),
+        }
+    }
+}
+
+fn parse_gRed(reader: &mut XmlReader) -> Result<TRed, Box<dyn Error>> {
+    let mut g: TRed = TRed::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"pRedAliq" => g.pRedAliq = txt.parse()?,
+                    b"pAliqEfet" => g.pAliqEfet = txt.parse()?,
+                    _ => (),
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"gRed" => return Ok(g),
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gRed".to_string()))),
+            _ => (),
+        }
+    }
+}
+
+fn parse_gIBSCBSMono(reader: &mut XmlReader) -> Result<TMonofasia, Box<dyn Error>> {
+    let mut monofasia = TMonofasia::default();
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"gMonoPadrao" => monofasia.gMonoPadrao = Some(parse_GMonoPadrao(reader)?),
+                b"gMonoReten" => monofasia.gMonoReten = Some(parse_GMonoReten(reader)?),
+                b"gMonoRet" => monofasia.gMonoRet = Some(parse_GMonoRet(reader)?),
+                b"gMonoDif" => monofasia.gMonoDif = Some(parse_GMonoDif(reader)?),
+
+                // Campos finais
+                name => {
+                    let txt = read_text_string(reader, &e)?;
+                    match name {
+                        b"vTotIBSMonoItem" => monofasia.vTotIBSMonoItem = txt.parse::<Decimal>()?,
+                        b"vTotCBSMonoItem" => monofasia.vTotCBSMonoItem = txt.parse::<Decimal>()?,
+                        _ => (),
+                    }
+                }
+            },
+            Ok(Event::End(e)) if e.name().as_ref() == b"gIBSCBSMono" => return Ok(monofasia),
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof(
+                    "gIBSCBSMono".to_string(),
+                )));
+            }
+            _ => (),
+        }
+    }
+}
+
+// --- Funções Auxiliares ---
+
+fn parse_GMonoPadrao(reader: &mut XmlReader) -> Result<GMonoPadrao, Box<dyn Error>> {
+    let mut g: GMonoPadrao = GMonoPadrao::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"qBCMono" => g.qBCMono = txt.parse::<Decimal>()?,
+                    b"adRemIBS" => g.adRemIBS = txt.parse::<Decimal>()?,
+                    b"adRemCBS" => g.adRemCBS = txt.parse::<Decimal>()?,
+                    b"vIBSMono" => g.vIBSMono = txt.parse::<Decimal>()?,
+                    b"vCBSMono" => g.vCBSMono = txt.parse::<Decimal>()?,
+                    _ => (),
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"gMonoPadrao" => return Ok(g),
+
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof(
+                    "GMonoPadrao".to_string(),
+                )));
+            }
+            _ => (),
+        }
+    }
+}
+
+fn parse_GMonoReten(reader: &mut XmlReader) -> Result<GMonoReten, Box<dyn Error>> {
+    let mut g: GMonoReten = GMonoReten::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"qBCMonoReten" => g.qBCMonoReten = txt.parse::<Decimal>()?,
+                    b"adRemIBSReten" => g.adRemIBSReten = txt.parse::<Decimal>()?,
+                    b"vIBSMonoReten" => g.vIBSMonoReten = txt.parse::<Decimal>()?,
+                    b"adRemCBSReten" => g.adRemCBSReten = txt.parse::<Decimal>()?,
+                    b"vCBSMonoReten" => g.vCBSMonoReten = txt.parse::<Decimal>()?,
+                    _ => (),
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"gMonoReten" => return Ok(g),
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof(
+                    "GMonoReten".to_string(),
+                )));
+            }
+            _ => (),
+        }
+    }
+}
+
+fn parse_GMonoRet(reader: &mut XmlReader) -> Result<GMonoRet, Box<dyn Error>> {
+    let mut g: GMonoRet = GMonoRet::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"qBCMonoRet" => g.qBCMonoRet = txt.parse::<Decimal>()?,
+                    b"adRemIBSRet" => g.adRemIBSRet = txt.parse::<Decimal>()?,
+                    b"vIBSMonoRet" => g.vIBSMonoRet = txt.parse::<Decimal>()?,
+                    b"adRemCBSRet" => g.adRemCBSRet = txt.parse::<Decimal>()?,
+                    b"vCBSMonoRet" => g.vCBSMonoRet = txt.parse::<Decimal>()?,
+                    _ => (),
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"gMonoRet" => return Ok(g),
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof("GMonoRet".to_string())));
+            }
+
+            _ => (),
+        }
+    }
+}
+
+fn parse_GMonoDif(reader: &mut XmlReader) -> Result<GMonoDif, Box<dyn Error>> {
+    let mut g: GMonoDif = GMonoDif::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"pDifIBS" => g.pDifIBS = txt.parse::<Decimal>()?,
+                    b"vIBSMonoDif" => g.vIBSMonoDif = txt.parse::<Decimal>()?,
+                    b"pDifCBS" => g.pDifCBS = txt.parse::<Decimal>()?,
+                    b"vCBSMonoDif" => g.vCBSMonoDif = txt.parse::<Decimal>()?,
+                    _ => (),
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"gMonoDif" => return Ok(g),
+            Ok(Event::Eof) => {
+                return Err(Box::new(ParseError::UnexpectedEof("GMonoDif".to_string())));
+            }
+            _ => (),
+        }
+    }
+}
+
+fn parse_gTransfCred(reader: &mut XmlReader) -> Result<TTransfCred, Box<dyn Error>> {
+    let mut transf_cred: TTransfCred = TTransfCred::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"vIBS" => transf_cred.vIBS = txt.parse()?,
+                    b"vCBS" => transf_cred.vCBS = txt.parse()?,
+                    _ => (),
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"gTransfCred" => return Ok(transf_cred),
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gTransfCred".to_string()))),
+            
+            _ => (),
+        }
+    }
+}
+
+fn parse_gCredPresIBSZFM(reader: &mut XmlReader) -> Result<TCredPresIBSZFM, Box<dyn Error>> {
+    let mut cred_pres: TCredPresIBSZFM = TCredPresIBSZFM::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"tpCredPresIBSZFM" => cred_pres.tpCredPresIBSZFM = txt,
+                    b"vCredPresIBSZFM" => cred_pres.vCredPresIBSZFM = Some(txt.parse()?),
+                    _ => (),
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"gCredPresIBSZFM" => return Ok(cred_pres),
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gCredPresIBSZFM".to_string()))),
+            _ => (),
+        }
+    }
+}
+
+fn parse_gCredPres(reader: &mut XmlReader, end_tag: &[u8]) -> Result<TCredPres, Box<dyn Error>> {
+    let mut g: TCredPres = TCredPres::default();
+    let mut vCredPres: Option<Decimal> = None;
+    let mut vCredPresCondSus: Option<Decimal> = None;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"cCredPres" => g.cCredPres = txt,
+                    b"pCredPres" => g.pCredPres = txt.parse()?,
+                    b"vCredPres" => vCredPres = Some(txt.parse()?),
+                    b"vCredPresCondSus" => vCredPresCondSus = Some(txt.parse()?),
+                    _ => (),
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == end_tag => {
+                if let Some(val) = vCredPres {
+                    g.valor = ValorCredPres::vCredPres(val);
+                } else if let Some(val) = vCredPresCondSus {
+                    g.valor = ValorCredPres::vCredPresCondSus(val);
+                } else {
+                    // O schema define a <choice> como obrigatória, então um dos dois deve existir.
+                    return Err("Estrutura de TCredPres inválida: vCredPres ou vCredPresCondSus não encontrado".into());
+                }
+                return Ok(g);
+            }
+
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gCredPres".to_string()))),
+            _ => (),
+        }
+    }
+}
+
+
+fn parse_gTribCompraGov(reader: &mut XmlReader) -> Result<TTribCompraGov, Box<dyn Error>> {
+    let mut g: TTribCompraGov = TTribCompraGov::default();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let txt = read_text_string(reader, &e)?;
+                match e.name().as_ref() {
+                    b"pAliqIBSUF" => g.pAliqIBSUF = txt.parse::<Decimal>()?,
+                    b"vTribIBSUF" => g.vTribIBSUF = txt.parse::<Decimal>()?,
+                    b"pAliqIBSMun" => g.pAliqIBSMun = txt.parse::<Decimal>()?,
+                    b"vTribIBSMun" => g.vTribIBSMun = txt.parse::<Decimal>()?,
+                    b"pAliqCBS" => g.pAliqCBS = txt.parse::<Decimal>()?,
+                    b"vTribCBS" => g.vTribCBS = txt.parse::<Decimal>()?,
+                    _ => (),
+                }
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"gTribCompraGov" => return Ok(g),
             _ => (),
         }
     }
@@ -1697,17 +2393,10 @@ fn parse_gPagAntecipado(reader: &mut XmlReader) -> Result<Vec<String>, Box<dyn E
             }
 
             // Tag terminou
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"gPagAntecipado" {
-                    return Ok(refNfes);
-                }
-            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"gPagAntecipado" => 
+                return Ok(refNfes),
 
-            Ok(Event::Eof) => {
-                return Err(Box::new(ParseError::UnexpectedEof(
-                    "gPagAntecipado".to_string(),
-                )));
-            }
+            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gPagAntecipado".to_string(),))),
 
             Err(e) => return Err(Box::new(e)),
             _ => {}
