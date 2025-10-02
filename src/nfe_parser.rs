@@ -25,7 +25,7 @@ use crate::{
         monofasia::{GMonoDif, GMonoPadrao, GMonoRet, GMonoReten, TMonofasia},
         pis::{self, CalculoPISOutr, PISAliq, PISOutr, PISQtde, TipoPis, PIS},
         pis_st::{CalculoPisSt, PISST},
-    }, nfe::{cobr::{Cobr, Dup, Fat}, common::{read_text_string, ParseError, XmlReader}, compra::parse_compra, exporta::parse_exporta, infAdic::parse_infAdic, inf_intermed::parse_infIntermed, pag::parse_pag, total::parse_total, transp::{Lacre, RetTransp, TVeiculo, Transp, Transporta, TransporteRodoviario, VeiculoTransporte, Vol}}, nfes::{
+    }, nfe::{agropecuario::parse_agropecuario, cana::parse_cana, cobr::{Cobr, Dup, Fat}, common::{read_text_string, ParseError, XmlReader}, compra::parse_compra, exporta::parse_exporta, infAdic::parse_infAdic, inf_intermed::parse_infIntermed, inf_resp_tec::parse_infRespTec, pag::parse_pag, total::parse_total, transp::{Lacre, RetTransp, TVeiculo, Transp, Transporta, TransporteRodoviario, VeiculoTransporte, Vol}}, nfes::{
         Adi, Arma, Avulsa, Cide, Combustivel, CompraGov, Dest, Det, DetExport, Emit, EmitenteId, Encerrante, EnderEmi, ExportInd, GCred, Ide, Imposto, InfProdEmb, InfProdNFF, Local, Medicamento, NFRef, NFe, NfeJson, OrigComb, Prod, ProdutoEspecifico, RefECFData, RefNFData, RefNFPData, Tributacao, Veiculo, DI, UF
     }
 };
@@ -78,8 +78,8 @@ fn parse_nfe_mod_65(xml: String, company_id: i128, org_id: i128) -> Result<Strin
     reader.config_mut().trim_text(true);
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let name = e.name();
 
                 match name.as_ref() {
@@ -116,8 +116,8 @@ fn parse_nfeProc_65(reader: &mut XmlReader) -> Result<NFe, Box<dyn Error>> {
     let mut nfe: NFe = NFe::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"infNFe" => nfe.Id = get_nfe_id(&e)?,
                 b"ide" => nfe.ide = parse_ide(reader)?,
                 b"emit" => nfe.emit = parse_emit(reader)?,
@@ -135,14 +135,19 @@ fn parse_nfeProc_65(reader: &mut XmlReader) -> Result<NFe, Box<dyn Error>> {
                 b"infAdic" => nfe.infAdic = Some(parse_infAdic(reader)?),
                 b"exporta" => nfe.exporta = Some(parse_exporta(reader)?),
                 b"compra" => nfe.compra = Some(parse_compra(reader)?),
+                b"cana" => nfe.cana = Some(parse_cana(reader)?),
+                b"infRespTec" => nfe.infRespTec = Some(parse_infRespTec(reader)?),
+
+                // infSolicNFF, simplificando leitura (é o campo seguinte e único)
+                b"xSolic" => nfe.infSolicNFF = Some(read_text_string(reader, &e)?),
+
+                b"agropecuario" => nfe.agropecuario = Some(parse_agropecuario(reader)?),
                 _ => {}
             },
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Ok(nfe);
             }
-
-            Err(e) => return Err(e.into()),
 
             _ => {}
         }
@@ -166,8 +171,8 @@ fn parse_ide(reader: &mut XmlReader) -> Result<Ide, Box<dyn Error>> {
     // Ver as nuâncias de como lidar com isso
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"NFref" => ide
                     .NFref
                     .get_or_insert_with(Vec::new)
@@ -214,32 +219,25 @@ fn parse_ide(reader: &mut XmlReader) -> Result<Ide, Box<dyn Error>> {
                 }
             },
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"ide" => {
+            Event::End(e) if e.name().as_ref() == b"ide" => {
                 return Ok(ide);
             }
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("ide".to_string())));
             }
 
-            Err(e) => {
-                log::error!("Error reading XML at Ide: {}", e);
-                break;
-            }
             _ => {}
         }
     }
-    return Err(Box::<dyn Error>::from(
-        "Unexpected error while parsing ide.",
-    ));
 }
 
 fn parse_emit(reader: &mut XmlReader) -> Result<Emit, Box<dyn Error>> {
     let mut emit: Emit = Emit::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"enderEmit" => emit.enderEmit = parse_enderEmit(reader, b"enderEmit")?,
 
                 name => {
@@ -260,15 +258,12 @@ fn parse_emit(reader: &mut XmlReader) -> Result<Emit, Box<dyn Error>> {
                 }
             },
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"emit" => return Ok(emit),
+            Event::End(e) if e.name().as_ref() == b"emit" => return Ok(emit),
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 log::error!("Unexpected Eof while parsing emit")
             }
-            Err(e) => {
-                log::error!("Error reading XML: {}", e);
-                break;
-            }
+
             _ => {}
         }
     }
@@ -278,8 +273,8 @@ fn parse_emit(reader: &mut XmlReader) -> Result<Emit, Box<dyn Error>> {
 fn parse_avulsa(reader: &mut XmlReader) -> Result<Avulsa, Box<dyn Error>> {
     let mut avulsa = Avulsa::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"CNPJ" => avulsa.CNPJ = txt,
@@ -298,10 +293,10 @@ fn parse_avulsa(reader: &mut XmlReader) -> Result<Avulsa, Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"avulsa" => {
+            Event::End(e) if e.name().as_ref() == b"avulsa" => {
                 return Ok(avulsa);
             },
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("avulsa".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("avulsa".to_string()))),
             _ => {},
         }
     }
@@ -310,8 +305,8 @@ fn parse_avulsa(reader: &mut XmlReader) -> Result<Avulsa, Box<dyn Error>> {
 fn parse_dest(reader: &mut XmlReader) -> Result<Dest, Box<dyn Error>> {
     let mut dest: Dest = Dest::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 // Delegação para o sub-parser de endereço
                 b"enderDest" => dest.enderDest = Some(parse_enderEmit(reader, b"enderDest")?),
 
@@ -335,8 +330,8 @@ fn parse_dest(reader: &mut XmlReader) -> Result<Dest, Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"dest" => return Ok(dest),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("dest".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"dest" => return Ok(dest),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("dest".to_string()))),
             _ => (),
         }
     }
@@ -346,8 +341,8 @@ fn parse_det(reader: &mut XmlReader) -> Result<Det, Box<dyn Error>> {
     let mut det: Det = Det::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"prod" => det.produto = parse_prod(reader)?,
 
                 b"imposto" => det.imposto = parse_imposto(reader)?,
@@ -364,9 +359,9 @@ fn parse_det(reader: &mut XmlReader) -> Result<Det, Box<dyn Error>> {
                 }
             },
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"det" => return Ok(det),
+            Event::End(e) if e.name().as_ref() == b"det" => return Ok(det),
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("det".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("det".to_string()))),
             _ => {}
         }
     }
@@ -378,8 +373,8 @@ fn parse_transp(reader: &mut XmlReader) -> Result<Transp, Box<dyn Error>> {
     let mut reboque: Option<Vec<TVeiculo>> = None;
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"transporta" => transp.transporta = Some(parse_transporta(reader)?),
                 b"retTransp" => transp.retTransp = Some(parse_retTransp(reader)?),
                 b"vol" => transp.vol.get_or_insert_with(Vec::new).push(parse_vol(reader)?),
@@ -397,7 +392,7 @@ fn parse_transp(reader: &mut XmlReader) -> Result<Transp, Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"transp" => {
+            Event::End(e) if e.name().as_ref() == b"transp" => {
                 if veicTransp.is_some() || reboque.is_some() {
                     transp.veiculo = Some(VeiculoTransporte::Rodoviario(TransporteRodoviario {
                         veicTransp,
@@ -406,7 +401,7 @@ fn parse_transp(reader: &mut XmlReader) -> Result<Transp, Box<dyn Error>> {
                 }
                 return Ok(transp);
             }
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("transp".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("transp".to_string()))),
             _ => (),
         }
     }
@@ -415,13 +410,13 @@ fn parse_transp(reader: &mut XmlReader) -> Result<Transp, Box<dyn Error>> {
 fn parse_lacres(reader: &mut XmlReader) -> Result<Lacre, Box<dyn Error>> {
     let mut lacre: Lacre = Lacre::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"nLacre" => {
+        match reader.read_event()? {
+            Event::Start(e) if e.name().as_ref() == b"nLacre" => {
                 lacre.nLacre = read_text_string(reader, &e)?;
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"lacres" => return Ok(lacre),
+            Event::End(e) if e.name().as_ref() == b"lacres" => return Ok(lacre),
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("lacres".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("lacres".to_string()))),
             _ => (),
         }
     }
@@ -430,8 +425,8 @@ fn parse_lacres(reader: &mut XmlReader) -> Result<Lacre, Box<dyn Error>> {
 fn parse_TVeiculo(reader: &mut XmlReader, end_tag: &[u8]) -> Result<TVeiculo, Box<dyn Error>> {
     let mut veiculo: TVeiculo = TVeiculo::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"placa" => veiculo.placa = txt,
@@ -440,8 +435,8 @@ fn parse_TVeiculo(reader: &mut XmlReader, end_tag: &[u8]) -> Result<TVeiculo, Bo
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == end_tag => return Ok(veiculo),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof(String::from_utf8_lossy(end_tag).to_string()))),
+            Event::End(e) if e.name().as_ref() == end_tag => return Ok(veiculo),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof(String::from_utf8_lossy(end_tag).to_string()))),
             _ => (),
         }
     }
@@ -450,8 +445,8 @@ fn parse_TVeiculo(reader: &mut XmlReader, end_tag: &[u8]) -> Result<TVeiculo, Bo
 fn parse_vol(reader: &mut XmlReader) -> Result<Vol, Box<dyn Error>> {
     let mut vol = Vol::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"lacres" => {
                     vol.lacres.get_or_insert_with(Vec::new).push(parse_lacres(reader)?);
                 }
@@ -468,9 +463,9 @@ fn parse_vol(reader: &mut XmlReader) -> Result<Vol, Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"vol" => return Ok(vol),
+            Event::End(e) if e.name().as_ref() == b"vol" => return Ok(vol),
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("vol".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("vol".to_string()))),
             
             _ => (),
         }
@@ -480,8 +475,8 @@ fn parse_vol(reader: &mut XmlReader) -> Result<Vol, Box<dyn Error>> {
 fn parse_transporta(reader: &mut XmlReader) -> Result<Transporta, Box<dyn Error>> {
     let mut t: Transporta = Transporta::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"CNPJ" => t.identificacao = Some(EmitenteId::CNPJ(txt)),
@@ -494,8 +489,8 @@ fn parse_transporta(reader: &mut XmlReader) -> Result<Transporta, Box<dyn Error>
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"transporta" => return Ok(t),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("transporta".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"transporta" => return Ok(t),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("transporta".to_string()))),
             _ => (),
         }
     }
@@ -504,8 +499,8 @@ fn parse_transporta(reader: &mut XmlReader) -> Result<Transporta, Box<dyn Error>
 fn parse_retTransp(reader: &mut XmlReader) -> Result<RetTransp, Box<dyn Error>> {
     let mut rt: RetTransp = RetTransp::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"vServ" => rt.vServ = txt.parse()?,
@@ -517,8 +512,8 @@ fn parse_retTransp(reader: &mut XmlReader) -> Result<RetTransp, Box<dyn Error>> 
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"retTransp" => return Ok(rt),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("retTransp".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"retTransp" => return Ok(rt),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("retTransp".to_string()))),
             _ => (),
         }
     }
@@ -527,15 +522,15 @@ fn parse_retTransp(reader: &mut XmlReader) -> Result<RetTransp, Box<dyn Error>> 
 fn parse_cobr(reader: &mut XmlReader) -> Result<Cobr, Box<dyn Error>> {
     let mut cobr: Cobr = Cobr::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"fat" => cobr.fat = Some(parse_fat(reader)?),
                 b"dup" => cobr.dup.get_or_insert_with(Vec::new).push(parse_dup(reader)?),
                 
                 _ => (),
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"cobr" => return Ok(cobr),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("cobr".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"cobr" => return Ok(cobr),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("cobr".to_string()))),
             _ => (),
         }
     }
@@ -544,8 +539,8 @@ fn parse_cobr(reader: &mut XmlReader) -> Result<Cobr, Box<dyn Error>> {
 fn parse_fat(reader: &mut XmlReader) -> Result<Fat, Box<dyn Error>> {
     let mut fat = Fat::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"nFat" => fat.nFat = Some(txt),
@@ -555,8 +550,8 @@ fn parse_fat(reader: &mut XmlReader) -> Result<Fat, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"fat" => return Ok(fat),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("fat".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"fat" => return Ok(fat),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("fat".to_string()))),
             _ => (),
         }
     }
@@ -565,8 +560,8 @@ fn parse_fat(reader: &mut XmlReader) -> Result<Fat, Box<dyn Error>> {
 fn parse_dup(reader: &mut XmlReader) -> Result<Dup, Box<dyn Error>> {
     let mut dup: Dup = Dup::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt: String = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"nDup" => dup.nDup = Some(txt),
@@ -575,8 +570,8 @@ fn parse_dup(reader: &mut XmlReader) -> Result<Dup, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"dup" => return Ok(dup),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("dup".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"dup" => return Ok(dup),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("dup".to_string()))),
             _ => (),
         }
     }
@@ -587,8 +582,8 @@ fn parse_prod(reader: &mut XmlReader) -> Result<Prod, Box<dyn Error>> {
     let mut prod: Prod = Prod::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"gCred" => prod
                     .gCred
                     .get_or_insert_default()
@@ -654,9 +649,9 @@ fn parse_prod(reader: &mut XmlReader) -> Result<Prod, Box<dyn Error>> {
                 }
             },
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"prod" => return Ok(prod),
+            Event::End(e) if e.name().as_ref() == b"prod" => return Ok(prod),
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("prod".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("prod".to_string()))),
 
             _ => {}
         }
@@ -667,8 +662,8 @@ fn parse_gCred(reader: &mut XmlReader) -> Result<GCred, Box<dyn Error>> {
     let mut gCred: GCred = GCred::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
 
                 match e.name().as_ref() {
@@ -680,9 +675,9 @@ fn parse_gCred(reader: &mut XmlReader) -> Result<GCred, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"gCred" => return Ok(gCred),
+            Event::End(e) if e.name().as_ref() == b"gCred" => return Ok(gCred),
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gCred".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gCred".to_string()))),
 
             _ => {}
         }
@@ -693,8 +688,8 @@ fn parse_DI(reader: &mut XmlReader) -> Result<DI, Box<dyn Error>> {
     let mut DI: DI = DI::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"adi" => DI.adi.push(parse_adi(reader)?),
 
                 name => {
@@ -717,9 +712,9 @@ fn parse_DI(reader: &mut XmlReader) -> Result<DI, Box<dyn Error>> {
                 }
             },
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"DI" => return Ok(DI),
+            Event::End(e) if e.name().as_ref() == b"DI" => return Ok(DI),
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("DI".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("DI".to_string()))),
             _ => {}
         }
     }
@@ -729,13 +724,13 @@ fn parse_detExport(reader: &mut XmlReader) -> Result<DetExport, Box<dyn Error>> 
     let mut detExport: DetExport = DetExport::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"exportInd" => {
                     let mut exportInd: ExportInd = ExportInd::default();
                     loop {
-                        match reader.read_event() {
-                            Ok(Event::Start(e)) => {
+                        match reader.read_event()? {
+                            Event::Start(e) => {
                                 let txt: String = read_text_string(reader, &e)?;
                                 match e.name().as_ref() {
                                     b"nRE" => exportInd.nRE = txt,
@@ -744,11 +739,11 @@ fn parse_detExport(reader: &mut XmlReader) -> Result<DetExport, Box<dyn Error>> 
                                     _ => break,
                                 }
                             }
-                            Ok(Event::End(e)) if e.name().as_ref() == b"exportInd" => {
+                            Event::End(e) if e.name().as_ref() == b"exportInd" => {
                                 detExport.exportInd = Some(exportInd);
                                 break;
                             }
-                            Ok(Event::Eof) => {
+                            Event::Eof => {
                                 return Err(Box::new(ParseError::UnexpectedEof(
                                     "exportInd".to_string(),
                                 )));
@@ -761,14 +756,14 @@ fn parse_detExport(reader: &mut XmlReader) -> Result<DetExport, Box<dyn Error>> 
                     let txt: String = read_text_string(reader, &e)?;
                     match name {
                         b"nDraw" => detExport.nDraw = Some(txt),
-                        _ => {}
+                        _ => (),
                     }
                 }
             },
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"detExport" => return Ok(detExport),
+            Event::End(e) if e.name().as_ref() == b"detExport" => return Ok(detExport),
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("detExport".to_string())));
             }
             _ => {}
@@ -780,8 +775,8 @@ fn parse_infProdNFF(reader: &mut XmlReader) -> Result<InfProdNFF, Box<dyn Error>
     let mut infProdNFF: InfProdNFF = InfProdNFF::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
 
                 match e.name().as_ref() {
@@ -791,9 +786,9 @@ fn parse_infProdNFF(reader: &mut XmlReader) -> Result<InfProdNFF, Box<dyn Error>
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"infProdNFF" => return Ok(infProdNFF),
+            Event::End(e) if e.name().as_ref() == b"infProdNFF" => return Ok(infProdNFF),
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(
                     "infProdNFF".to_string(),
                 )));
@@ -808,8 +803,8 @@ fn parse_infProdEmb(reader: &mut XmlReader) -> Result<InfProdEmb, Box<dyn Error>
     let mut infProdEmb: InfProdEmb = InfProdEmb::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
 
                 match e.name().as_ref() {
@@ -820,9 +815,9 @@ fn parse_infProdEmb(reader: &mut XmlReader) -> Result<InfProdEmb, Box<dyn Error>
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"infProdEmb" => return Ok(infProdEmb),
+            Event::End(e) if e.name().as_ref() == b"infProdEmb" => return Ok(infProdEmb),
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(
                     "infProdEmb".to_string(),
                 )));
@@ -837,8 +832,8 @@ fn parse_veicProd(reader: &mut XmlReader) -> Result<Veiculo, Box<dyn Error>> {
     let mut veicProd: Veiculo = Veiculo::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
 
                 match e.name().as_ref() {
@@ -870,9 +865,9 @@ fn parse_veicProd(reader: &mut XmlReader) -> Result<Veiculo, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"veicProd" => return Ok(veicProd),
+            Event::End(e) if e.name().as_ref() == b"veicProd" => return Ok(veicProd),
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("veicProd".to_string())));
             }
 
@@ -885,8 +880,8 @@ fn parse_med(reader: &mut XmlReader) -> Result<Medicamento, Box<dyn Error>> {
     let mut med = Medicamento::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
 
                 match e.name().as_ref() {
@@ -896,8 +891,8 @@ fn parse_med(reader: &mut XmlReader) -> Result<Medicamento, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"med" => return Ok(med),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("med".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"med" => return Ok(med),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("med".to_string()))),
             _ => (),
         }
     }
@@ -907,8 +902,8 @@ fn parse_arma(reader: &mut XmlReader) -> Result<Arma, Box<dyn Error>> {
     let mut arma = Arma::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"tpArma" => arma.tpArma = txt.parse()?,
@@ -919,9 +914,9 @@ fn parse_arma(reader: &mut XmlReader) -> Result<Arma, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"arma" => return Ok(arma),
+            Event::End(e) if e.name().as_ref() == b"arma" => return Ok(arma),
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("arma".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("arma".to_string()))),
 
             _ => (),
         }
@@ -932,8 +927,8 @@ fn parse_comb(reader: &mut XmlReader) -> Result<Combustivel, Box<dyn Error>> {
     let mut combustivel = Combustivel::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 // Tags que são grupos aninhados
                 b"CIDE" => combustivel.CIDE = Some(parse_cide(reader)?),
                 b"encerrante" => combustivel.encerrante = Some(parse_encerrante(reader)?),
@@ -960,8 +955,8 @@ fn parse_comb(reader: &mut XmlReader) -> Result<Combustivel, Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"comb" => return Ok(combustivel),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("comb".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"comb" => return Ok(combustivel),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("comb".to_string()))),
             _ => (),
         }
     }
@@ -972,8 +967,8 @@ fn parse_comb(reader: &mut XmlReader) -> Result<Combustivel, Box<dyn Error>> {
 fn parse_cide(reader: &mut XmlReader) -> Result<Cide, Box<dyn Error>> {
     let mut cide: Cide = Cide::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"qBCProd" => cide.qBCProd = txt.parse()?,
@@ -982,8 +977,8 @@ fn parse_cide(reader: &mut XmlReader) -> Result<Cide, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"CIDE" => return Ok(cide),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("CIDE".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"CIDE" => return Ok(cide),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("CIDE".to_string()))),
             _ => (),
         }
     }
@@ -992,8 +987,8 @@ fn parse_cide(reader: &mut XmlReader) -> Result<Cide, Box<dyn Error>> {
 fn parse_encerrante(reader: &mut XmlReader) -> Result<Encerrante, Box<dyn Error>> {
     let mut encerrante: Encerrante = Encerrante::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"nBico" => encerrante.nBico = txt.parse()?,
@@ -1004,8 +999,8 @@ fn parse_encerrante(reader: &mut XmlReader) -> Result<Encerrante, Box<dyn Error>
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"encerrante" => return Ok(encerrante),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"encerrante" => return Ok(encerrante),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(
                     "encerrante".to_string(),
                 )));
@@ -1018,8 +1013,8 @@ fn parse_encerrante(reader: &mut XmlReader) -> Result<Encerrante, Box<dyn Error>
 fn parse_orig_comb(reader: &mut XmlReader) -> Result<OrigComb, Box<dyn Error>> {
     let mut orig: OrigComb = OrigComb::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"indImport" => orig.indImport = txt.parse()?,
@@ -1028,8 +1023,8 @@ fn parse_orig_comb(reader: &mut XmlReader) -> Result<OrigComb, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"origComb" => return Ok(orig),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"origComb" => return Ok(orig),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("origComb".to_string())));
             }
             _ => (),
@@ -1039,8 +1034,8 @@ fn parse_orig_comb(reader: &mut XmlReader) -> Result<OrigComb, Box<dyn Error>> {
 fn parse_adi(reader: &mut XmlReader) -> Result<Adi, Box<dyn Error>> {
     let mut adi: Adi = Adi::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
 
                 match e.name().as_ref() {
@@ -1053,9 +1048,9 @@ fn parse_adi(reader: &mut XmlReader) -> Result<Adi, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"adi" => return Ok(adi),
+            Event::End(e) if e.name().as_ref() == b"adi" => return Ok(adi),
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("adi".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("adi".to_string()))),
             _ => {}
         }
     }
@@ -1072,8 +1067,8 @@ fn parse_imposto(reader: &mut XmlReader) -> Result<Imposto, Box<dyn Error>> {
     let mut issqn: Option<ISSQN> = None;
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"ICMS" => icms = Some(parse_ICMS(reader)?),
                 b"II" => ii = Some(parse_II(reader)?),
 
@@ -1096,7 +1091,7 @@ fn parse_imposto(reader: &mut XmlReader) -> Result<Imposto, Box<dyn Error>> {
                 }
             },
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"imposto" => {
+            Event::End(e) if e.name().as_ref() == b"imposto" => {
                 if let Some(icms) = icms {
                     imposto.tributacao = Some(Tributacao::Mercadoria {
                         ICMS: icms,
@@ -1112,7 +1107,7 @@ fn parse_imposto(reader: &mut XmlReader) -> Result<Imposto, Box<dyn Error>> {
                 return Ok(imposto);
             }
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("imposto".to_string())));
             }
 
@@ -1125,8 +1120,8 @@ fn parse_impostoDevol(reader: &mut XmlReader) -> Result<ImpostoDevol, Box<dyn Er
     let mut imposto_devol = ImpostoDevol::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"IPI" => imposto_devol.IPI = parse_IpiDevol(reader)?,
                 // Trata os campos que são filhos diretos
                 name => {
@@ -1138,8 +1133,8 @@ fn parse_impostoDevol(reader: &mut XmlReader) -> Result<ImpostoDevol, Box<dyn Er
                 }
             },
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"impostoDevol" => return Ok(imposto_devol),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("impostoDevol".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"impostoDevol" => return Ok(imposto_devol),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("impostoDevol".to_string()))),
             _ => (),
         }
     }
@@ -1148,12 +1143,12 @@ fn parse_impostoDevol(reader: &mut XmlReader) -> Result<ImpostoDevol, Box<dyn Er
 fn parse_IpiDevol(reader: &mut XmlReader) -> Result<IpiDevol, Box<dyn Error>> {
     let mut ipi_devol: IpiDevol = IpiDevol::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"vIPIDevol" => ipi_devol.vIPIDevol = read_text_string(reader, &e)?.parse()?,
+        match reader.read_event()? {
+            Event::Start(e) if e.name().as_ref() == b"vIPIDevol" => ipi_devol.vIPIDevol = read_text_string(reader, &e)?.parse()?,
             
-            Ok(Event::End(e)) if e.name().as_ref() == b"IPI" => return Ok(ipi_devol),
+            Event::End(e) if e.name().as_ref() == b"IPI" => return Ok(ipi_devol),
             
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("IPI em impostoDevol".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("IPI em impostoDevol".to_string()))),
             _ => (),
         }
     }
@@ -1162,8 +1157,8 @@ fn parse_IpiDevol(reader: &mut XmlReader) -> Result<IpiDevol, Box<dyn Error>> {
 fn parse_ICMS(reader: &mut XmlReader) -> Result<Icms, Box<dyn Error>> {
     let mut ICMS: Icms = Icms::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"ICMS00" => ICMS.tipo = TipoICMS::ICMS00,
                 b"ICMS02" => ICMS.tipo = TipoICMS::ICMS02,
                 b"ICMS10" => ICMS.tipo = TipoICMS::ICMS10,
@@ -1286,9 +1281,9 @@ fn parse_ICMS(reader: &mut XmlReader) -> Result<Icms, Box<dyn Error>> {
                 }
             },
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"ICMS" => return Ok(ICMS),
+            Event::End(e) if e.name().as_ref() == b"ICMS" => return Ok(ICMS),
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("ICMS".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("ICMS".to_string()))),
 
             _ => {}
         }
@@ -1299,8 +1294,8 @@ fn parse_IPI(reader: &mut XmlReader) -> Result<Ipi, Box<dyn Error>> {
     let mut ipi: Ipi = Ipi::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"IPITrib" => ipi.Tributacao = ipi::Tributacao::IPITrib(parse_IPITrib(reader)?),
                 b"IPINT" => {} // É ignorado, pois será lido no match abaixo.
 
@@ -1319,9 +1314,9 @@ fn parse_IPI(reader: &mut XmlReader) -> Result<Ipi, Box<dyn Error>> {
                 }
             },
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"IPI" => return Ok(ipi),
+            Event::End(e) if e.name().as_ref() == b"IPI" => return Ok(ipi),
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("IPI".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("IPI".to_string()))),
 
             _ => {}
         }
@@ -1331,8 +1326,8 @@ fn parse_IPI(reader: &mut XmlReader) -> Result<Ipi, Box<dyn Error>> {
 fn parse_II(reader: &mut XmlReader) -> Result<Ii, Box<dyn Error>> {
     let mut ii: Ii = Ii::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let name = e.name();
                 let txt = read_text_string(reader, &e)?;
 
@@ -1345,8 +1340,8 @@ fn parse_II(reader: &mut XmlReader) -> Result<Ii, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"II" => return Ok(ii),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("II".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"II" => return Ok(ii),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("II".to_string()))),
 
             _ => {}
         }
@@ -1355,8 +1350,8 @@ fn parse_II(reader: &mut XmlReader) -> Result<Ii, Box<dyn Error>> {
 fn parse_ISSQN(reader: &mut XmlReader) -> Result<ISSQN, Box<dyn Error>> {
     let mut ISSQN: ISSQN = ISSQN::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let name = e.name();
                 let txt = read_text_string(reader, &e)?;
 
@@ -1385,8 +1380,8 @@ fn parse_ISSQN(reader: &mut XmlReader) -> Result<ISSQN, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"ISSQN" => return Ok(ISSQN),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("ISSQN".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"ISSQN" => return Ok(ISSQN),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("ISSQN".to_string()))),
 
             _ => {}
         }
@@ -1397,8 +1392,8 @@ fn parse_PIS(reader: &mut XmlReader) -> Result<PIS, Box<dyn Error>> {
     let mut pis: PIS = PIS::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"PISAliq" => {
                     pis.tipo = TipoPis::PISAliq;
                     pis.tributacao = pis::Tributacao::PISAliq(parse_PISAliq(reader)?);
@@ -1425,9 +1420,9 @@ fn parse_PIS(reader: &mut XmlReader) -> Result<PIS, Box<dyn Error>> {
                 }
             },
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"PIS" => return Ok(pis),
+            Event::End(e) if e.name().as_ref() == b"PIS" => return Ok(pis),
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("PIS".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("PIS".to_string()))),
 
             _ => {}
         }
@@ -1444,8 +1439,8 @@ fn parse_PISST(reader: &mut XmlReader) -> Result<PISST, Box<dyn Error>> {
     let mut vAliqProd: Option<Decimal> = None;
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     // Campos diretos da struct PISST
@@ -1465,7 +1460,7 @@ fn parse_PISST(reader: &mut XmlReader) -> Result<PISST, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"PISST" => {
+            Event::End(e) if e.name().as_ref() == b"PISST" => {
                 // Ao final do bloco, decide qual variante do enum construir
                 if let (Some(vbc_val), Some(ppis_val)) = (vBC, pPIS) {
                     pis_st.calculo = CalculoPisSt::Aliquota {
@@ -1485,7 +1480,7 @@ fn parse_PISST(reader: &mut XmlReader) -> Result<PISST, Box<dyn Error>> {
                 return Ok(pis_st);
             }
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("PISST".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("PISST".to_string()))),
             _ => {}
         }
     }
@@ -1494,8 +1489,8 @@ fn parse_PISST(reader: &mut XmlReader) -> Result<PISST, Box<dyn Error>> {
 fn parse_COFINS(reader: &mut XmlReader) -> Result<COFINS, Box<dyn Error>> {
     let mut COFINS: COFINS = COFINS::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 match e.name().as_ref() {
                     b"COFINSAliq" => {
                         COFINS.tipo = TipoCofins::COFINSAliq;
@@ -1525,10 +1520,10 @@ fn parse_COFINS(reader: &mut XmlReader) -> Result<COFINS, Box<dyn Error>> {
                     }
                 };
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"COFINS" => {
+            Event::End(e) if e.name().as_ref() == b"COFINS" => {
                 return Ok(COFINS);
             }
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("COFINS".to_string())));
             }
             _ => (),
@@ -1546,8 +1541,8 @@ fn parse_COFINSST(reader: &mut XmlReader) -> Result<COFINSST, Box<dyn Error>> {
     let mut vAliqProd: Option<Decimal> = None;
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     // Campos diretos da struct
@@ -1567,7 +1562,7 @@ fn parse_COFINSST(reader: &mut XmlReader) -> Result<COFINSST, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"COFINSST" => {
+            Event::End(e) if e.name().as_ref() == b"COFINSST" => {
                 // Decide e constrói o enum com base nos campos coletados
                 if let (Some(vbc_val), Some(pcofins_val)) = (vBC, pCOFINS) {
                     cofins_st.calculo = CalculoCofinsSt::Aliquota {
@@ -1586,7 +1581,7 @@ fn parse_COFINSST(reader: &mut XmlReader) -> Result<COFINSST, Box<dyn Error>> {
                 return Ok(cofins_st);
             }
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("COFINSST".to_string())));
             }
             _ => {}
@@ -1598,8 +1593,8 @@ fn parse_ICMSUFDest(reader: &mut XmlReader) -> Result<ICMSUFDest, Box<dyn Error>
     let mut icms_uf_dest: ICMSUFDest = ICMSUFDest::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"vBCUFDest" => icms_uf_dest.vBCUFDest = txt.parse()?,
@@ -1617,10 +1612,10 @@ fn parse_ICMSUFDest(reader: &mut XmlReader) -> Result<ICMSUFDest, Box<dyn Error>
                     }
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"ICMSUFDest" => {
+            Event::End(e) if e.name().as_ref() == b"ICMSUFDest" => {
                 return Ok(icms_uf_dest);
             }
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(
                     "ICMSUFDest".to_string(),
                 )));
@@ -1642,8 +1637,8 @@ fn parse_IS(reader: &mut XmlReader) -> Result<IS, Box<dyn Error>> {
     let mut vIS: Option<Decimal> = None;
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"CSTIS" => is.CSTIS = txt,
@@ -1661,7 +1656,7 @@ fn parse_IS(reader: &mut XmlReader) -> Result<IS, Box<dyn Error>> {
                     }
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"IS" => {
+            Event::End(e) if e.name().as_ref() == b"IS" => {
                 if let (Some(vbc), Some(pis_val), Some(vis_val)) = (vBCIS, pIS, vIS) {
                     let unidade_tributavel =
                         if let (Some(utrib_val), Some(qtrib_val)) = (uTrib, qTrib) {
@@ -1683,7 +1678,7 @@ fn parse_IS(reader: &mut XmlReader) -> Result<IS, Box<dyn Error>> {
                 }
                 return Ok(is);
             }
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("IS".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("IS".to_string()))),
             _ => {}
         }
     }
@@ -1693,8 +1688,8 @@ fn parse_IBSCBS(reader: &mut XmlReader) -> Result<IBSCBS, Box<dyn Error>> {
     let mut ibscbs = IBSCBS::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 match e.name().as_ref() {
                     // --- Sub-contêineres (delega para outras funções) ---
                     b"gIBSCBS" => {
@@ -1726,10 +1721,10 @@ fn parse_IBSCBS(reader: &mut XmlReader) -> Result<IBSCBS, Box<dyn Error>> {
                     }
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"IBSCBS" => {
+            Event::End(e) if e.name().as_ref() == b"IBSCBS" => {
                 return Ok(ibscbs);
             }
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("IBSCBS".to_string())));
             }
             _ => {}
@@ -1740,8 +1735,8 @@ fn parse_IBSCBS(reader: &mut XmlReader) -> Result<IBSCBS, Box<dyn Error>> {
 fn parse_gIBSCBS(reader: &mut XmlReader) -> Result<TCIBS, Box<dyn Error>> {
     let mut tcibs: TCIBS = TCIBS::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"gIBSUF" => tcibs.gIBSUF = parse_gIBSUF(reader)?,
                 b"gIBSMun" => tcibs.gIBSMun = parse_gIBSMun(reader)?,
                 b"gCBS" => tcibs.gCBS = parse_gCBS(reader)?,
@@ -1758,8 +1753,8 @@ fn parse_gIBSCBS(reader: &mut XmlReader) -> Result<TCIBS, Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"gIBSCBS" => return Ok(tcibs),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"gIBSCBS" => return Ok(tcibs),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("gIBSCBS".to_string())));
             }
             _ => (),
@@ -1770,8 +1765,8 @@ fn parse_gIBSCBS(reader: &mut XmlReader) -> Result<TCIBS, Box<dyn Error>> {
 fn parse_gIBSUF(reader: &mut XmlReader) -> Result<GIBSUF, Box<dyn Error>> {
     let mut g: GIBSUF = GIBSUF::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"gDif" => g.gDif = Some(parse_gDif(reader)?),
                 b"gDevTrib" => g.gDevTrib = Some(parse_gDevTrib(reader)?),
                 b"gRed" => g.gRed = Some(parse_gRed(reader)?),
@@ -1784,9 +1779,9 @@ fn parse_gIBSUF(reader: &mut XmlReader) -> Result<GIBSUF, Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"gIBSUF" => return Ok(g),
+            Event::End(e) if e.name().as_ref() == b"gIBSUF" => return Ok(g),
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("gIBSUF".to_string())));
             }
             _ => (),
@@ -1797,8 +1792,8 @@ fn parse_gIBSUF(reader: &mut XmlReader) -> Result<GIBSUF, Box<dyn Error>> {
 fn parse_gIBSMun(reader: &mut XmlReader) -> Result<GIBSMun, Box<dyn Error>> {
     let mut g = GIBSMun::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"gDif" => g.gDif = Some(parse_gDif(reader)?),
                 b"gDevTrib" => g.gDevTrib = Some(parse_gDevTrib(reader)?),
                 b"gRed" => g.gRed = Some(parse_gRed(reader)?),
@@ -1811,8 +1806,8 @@ fn parse_gIBSMun(reader: &mut XmlReader) -> Result<GIBSMun, Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"gIBSMun" => return Ok(g),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"gIBSMun" => return Ok(g),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("gIBSMun".to_string())));
             }
 
@@ -1824,8 +1819,8 @@ fn parse_gIBSMun(reader: &mut XmlReader) -> Result<GIBSMun, Box<dyn Error>> {
 fn parse_gCBS(reader: &mut XmlReader) -> Result<GCBS, Box<dyn Error>> {
     let mut g = GCBS::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"gDif" => g.gDif = Some(parse_gDif(reader)?),
                 b"gDevTrib" => g.gDevTrib = Some(parse_gDevTrib(reader)?),
                 b"gRed" => g.gRed = Some(parse_gRed(reader)?),
@@ -1838,8 +1833,8 @@ fn parse_gCBS(reader: &mut XmlReader) -> Result<GCBS, Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"gCBS" => return Ok(g),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gCBS".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"gCBS" => return Ok(g),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gCBS".to_string()))),
             _ => (),
         }
     }
@@ -1848,8 +1843,8 @@ fn parse_gCBS(reader: &mut XmlReader) -> Result<GCBS, Box<dyn Error>> {
 fn parse_gTribRegular(reader: &mut XmlReader) -> Result<TTribRegular, Box<dyn Error>> {
     let mut g: TTribRegular = TTribRegular::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"CSTReg" => g.CSTReg = txt,
@@ -1863,8 +1858,8 @@ fn parse_gTribRegular(reader: &mut XmlReader) -> Result<TTribRegular, Box<dyn Er
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gTribRegular" => return Ok(g),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"gTribRegular" => return Ok(g),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(
                     "gTribRegular".to_string(),
                 )));
@@ -1877,8 +1872,8 @@ fn parse_gTribRegular(reader: &mut XmlReader) -> Result<TTribRegular, Box<dyn Er
 fn parse_gDif(reader: &mut XmlReader) -> Result<TDif, Box<dyn Error>> {
     let mut g = TDif::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"pDif" => g.pDif = txt.parse()?,
@@ -1886,8 +1881,8 @@ fn parse_gDif(reader: &mut XmlReader) -> Result<TDif, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gDif" => return Ok(g),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gDif".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"gDif" => return Ok(g),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gDif".to_string()))),
 
             _ => (),
         }
@@ -1897,13 +1892,13 @@ fn parse_gDif(reader: &mut XmlReader) -> Result<TDif, Box<dyn Error>> {
 fn parse_gDevTrib(reader: &mut XmlReader) -> Result<TDevTrib, Box<dyn Error>> {
     let mut g: TDevTrib = TDevTrib::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"vDevTrib" => {
+        match reader.read_event()? {
+            Event::Start(e) if e.name().as_ref() == b"vDevTrib" => {
                 g.vDevTrib = read_text_string(reader, &e)?.parse()?;
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gDevTrib" => return Ok(g),
+            Event::End(e) if e.name().as_ref() == b"gDevTrib" => return Ok(g),
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("gDevTrib".to_string())));
             }
             _ => (),
@@ -1914,8 +1909,8 @@ fn parse_gDevTrib(reader: &mut XmlReader) -> Result<TDevTrib, Box<dyn Error>> {
 fn parse_gRed(reader: &mut XmlReader) -> Result<TRed, Box<dyn Error>> {
     let mut g: TRed = TRed::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"pRedAliq" => g.pRedAliq = txt.parse()?,
@@ -1923,8 +1918,8 @@ fn parse_gRed(reader: &mut XmlReader) -> Result<TRed, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gRed" => return Ok(g),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gRed".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"gRed" => return Ok(g),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gRed".to_string()))),
             _ => (),
         }
     }
@@ -1934,8 +1929,8 @@ fn parse_gIBSCBSMono(reader: &mut XmlReader) -> Result<TMonofasia, Box<dyn Error
     let mut monofasia = TMonofasia::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"gMonoPadrao" => monofasia.gMonoPadrao = Some(parse_GMonoPadrao(reader)?),
                 b"gMonoReten" => monofasia.gMonoReten = Some(parse_GMonoReten(reader)?),
                 b"gMonoRet" => monofasia.gMonoRet = Some(parse_GMonoRet(reader)?),
@@ -1951,8 +1946,8 @@ fn parse_gIBSCBSMono(reader: &mut XmlReader) -> Result<TMonofasia, Box<dyn Error
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"gIBSCBSMono" => return Ok(monofasia),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"gIBSCBSMono" => return Ok(monofasia),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(
                     "gIBSCBSMono".to_string(),
                 )));
@@ -1967,8 +1962,8 @@ fn parse_gIBSCBSMono(reader: &mut XmlReader) -> Result<TMonofasia, Box<dyn Error
 fn parse_GMonoPadrao(reader: &mut XmlReader) -> Result<GMonoPadrao, Box<dyn Error>> {
     let mut g: GMonoPadrao = GMonoPadrao::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"qBCMono" => g.qBCMono = txt.parse::<Decimal>()?,
@@ -1979,9 +1974,9 @@ fn parse_GMonoPadrao(reader: &mut XmlReader) -> Result<GMonoPadrao, Box<dyn Erro
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gMonoPadrao" => return Ok(g),
+            Event::End(e) if e.name().as_ref() == b"gMonoPadrao" => return Ok(g),
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(
                     "GMonoPadrao".to_string(),
                 )));
@@ -1994,8 +1989,8 @@ fn parse_GMonoPadrao(reader: &mut XmlReader) -> Result<GMonoPadrao, Box<dyn Erro
 fn parse_GMonoReten(reader: &mut XmlReader) -> Result<GMonoReten, Box<dyn Error>> {
     let mut g: GMonoReten = GMonoReten::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"qBCMonoReten" => g.qBCMonoReten = txt.parse::<Decimal>()?,
@@ -2006,8 +2001,8 @@ fn parse_GMonoReten(reader: &mut XmlReader) -> Result<GMonoReten, Box<dyn Error>
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gMonoReten" => return Ok(g),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"gMonoReten" => return Ok(g),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(
                     "GMonoReten".to_string(),
                 )));
@@ -2020,8 +2015,8 @@ fn parse_GMonoReten(reader: &mut XmlReader) -> Result<GMonoReten, Box<dyn Error>
 fn parse_GMonoRet(reader: &mut XmlReader) -> Result<GMonoRet, Box<dyn Error>> {
     let mut g: GMonoRet = GMonoRet::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"qBCMonoRet" => g.qBCMonoRet = txt.parse::<Decimal>()?,
@@ -2032,8 +2027,8 @@ fn parse_GMonoRet(reader: &mut XmlReader) -> Result<GMonoRet, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gMonoRet" => return Ok(g),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"gMonoRet" => return Ok(g),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("GMonoRet".to_string())));
             }
 
@@ -2045,8 +2040,8 @@ fn parse_GMonoRet(reader: &mut XmlReader) -> Result<GMonoRet, Box<dyn Error>> {
 fn parse_GMonoDif(reader: &mut XmlReader) -> Result<GMonoDif, Box<dyn Error>> {
     let mut g: GMonoDif = GMonoDif::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"pDifIBS" => g.pDifIBS = txt.parse::<Decimal>()?,
@@ -2056,8 +2051,8 @@ fn parse_GMonoDif(reader: &mut XmlReader) -> Result<GMonoDif, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gMonoDif" => return Ok(g),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"gMonoDif" => return Ok(g),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("GMonoDif".to_string())));
             }
             _ => (),
@@ -2068,8 +2063,8 @@ fn parse_GMonoDif(reader: &mut XmlReader) -> Result<GMonoDif, Box<dyn Error>> {
 fn parse_gTransfCred(reader: &mut XmlReader) -> Result<TTransfCred, Box<dyn Error>> {
     let mut transf_cred: TTransfCred = TTransfCred::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"vIBS" => transf_cred.vIBS = txt.parse()?,
@@ -2077,8 +2072,8 @@ fn parse_gTransfCred(reader: &mut XmlReader) -> Result<TTransfCred, Box<dyn Erro
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gTransfCred" => return Ok(transf_cred),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gTransfCred".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"gTransfCred" => return Ok(transf_cred),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gTransfCred".to_string()))),
             
             _ => (),
         }
@@ -2088,8 +2083,8 @@ fn parse_gTransfCred(reader: &mut XmlReader) -> Result<TTransfCred, Box<dyn Erro
 fn parse_gCredPresIBSZFM(reader: &mut XmlReader) -> Result<TCredPresIBSZFM, Box<dyn Error>> {
     let mut cred_pres: TCredPresIBSZFM = TCredPresIBSZFM::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"tpCredPresIBSZFM" => cred_pres.tpCredPresIBSZFM = txt,
@@ -2097,8 +2092,8 @@ fn parse_gCredPresIBSZFM(reader: &mut XmlReader) -> Result<TCredPresIBSZFM, Box<
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gCredPresIBSZFM" => return Ok(cred_pres),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gCredPresIBSZFM".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"gCredPresIBSZFM" => return Ok(cred_pres),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gCredPresIBSZFM".to_string()))),
             _ => (),
         }
     }
@@ -2110,8 +2105,8 @@ fn parse_gCredPres(reader: &mut XmlReader, end_tag: &[u8]) -> Result<TCredPres, 
     let mut vCredPresCondSus: Option<Decimal> = None;
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"cCredPres" => g.cCredPres = txt,
@@ -2121,7 +2116,7 @@ fn parse_gCredPres(reader: &mut XmlReader, end_tag: &[u8]) -> Result<TCredPres, 
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == end_tag => {
+            Event::End(e) if e.name().as_ref() == end_tag => {
                 if let Some(val) = vCredPres {
                     g.valor = ValorCredPres::vCredPres(val);
                 } else if let Some(val) = vCredPresCondSus {
@@ -2133,7 +2128,7 @@ fn parse_gCredPres(reader: &mut XmlReader, end_tag: &[u8]) -> Result<TCredPres, 
                 return Ok(g);
             }
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gCredPres".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gCredPres".to_string()))),
             _ => (),
         }
     }
@@ -2143,8 +2138,8 @@ fn parse_gCredPres(reader: &mut XmlReader, end_tag: &[u8]) -> Result<TCredPres, 
 fn parse_gTribCompraGov(reader: &mut XmlReader) -> Result<TTribCompraGov, Box<dyn Error>> {
     let mut g: TTribCompraGov = TTribCompraGov::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"pAliqIBSUF" => g.pAliqIBSUF = txt.parse::<Decimal>()?,
@@ -2156,7 +2151,7 @@ fn parse_gTribCompraGov(reader: &mut XmlReader) -> Result<TTribCompraGov, Box<dy
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gTribCompraGov" => return Ok(g),
+            Event::End(e) if e.name().as_ref() == b"gTribCompraGov" => return Ok(g),
             _ => (),
         }
     }
@@ -2165,8 +2160,8 @@ fn parse_gTribCompraGov(reader: &mut XmlReader) -> Result<TTribCompraGov, Box<dy
 fn parse_COFINSAliq(reader: &mut XmlReader) -> Result<COFINSAliq, Box<dyn Error>> {
     let mut cofins_aliq: COFINSAliq = COFINSAliq::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"CST" => cofins_aliq.CST = txt,
@@ -2176,8 +2171,8 @@ fn parse_COFINSAliq(reader: &mut XmlReader) -> Result<COFINSAliq, Box<dyn Error>
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"COFINSAliq" => return Ok(cofins_aliq),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"COFINSAliq" => return Ok(cofins_aliq),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(
                     "COFINSAliq".to_string(),
                 )));
@@ -2190,8 +2185,8 @@ fn parse_COFINSAliq(reader: &mut XmlReader) -> Result<COFINSAliq, Box<dyn Error>
 fn parse_COFINSQtde(reader: &mut XmlReader) -> Result<COFINSQtde, Box<dyn Error>> {
     let mut cofins_qtde = COFINSQtde::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"CST" => cofins_qtde.CST = txt,
@@ -2201,8 +2196,8 @@ fn parse_COFINSQtde(reader: &mut XmlReader) -> Result<COFINSQtde, Box<dyn Error>
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"COFINSQtde" => return Ok(cofins_qtde),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"COFINSQtde" => return Ok(cofins_qtde),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(
                     "COFINSQtde".to_string(),
                 )));
@@ -2214,12 +2209,12 @@ fn parse_COFINSQtde(reader: &mut XmlReader) -> Result<COFINSQtde, Box<dyn Error>
 fn parse_COFINSNT(reader: &mut XmlReader) -> Result<String, Box<dyn Error>> {
     let mut cst: String = String::new();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"CST" => {
+        match reader.read_event()? {
+            Event::Start(e) if e.name().as_ref() == b"CST" => {
                 cst = read_text_string(reader, &e)?;
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"COFINSNT" => return Ok(cst),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"COFINSNT" => return Ok(cst),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("COFINSNT".to_string())));
             }
             _ => (),
@@ -2234,8 +2229,8 @@ fn parse_COFINSOutr(reader: &mut XmlReader) -> Result<COFINSOutr, Box<dyn Error>
     let mut vAliqProd: Option<Decimal> = None;
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"CST" => cofins_outr.CST = txt,
@@ -2247,7 +2242,7 @@ fn parse_COFINSOutr(reader: &mut XmlReader) -> Result<COFINSOutr, Box<dyn Error>
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"COFINSOutr" => {
+            Event::End(e) if e.name().as_ref() == b"COFINSOutr" => {
                 if let (Some(vbc_val), Some(pcofins_val)) = (vBC, pCOFINS) {
                     cofins_outr.calculo = CalculoCOFINSOutr::Aliquota {
                         vBC: vbc_val,
@@ -2263,7 +2258,7 @@ fn parse_COFINSOutr(reader: &mut XmlReader) -> Result<COFINSOutr, Box<dyn Error>
                 }
                 return Ok(cofins_outr);
             }
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(
                     "COFINSOutr".to_string(),
                 )));
@@ -2276,8 +2271,8 @@ fn parse_COFINSOutr(reader: &mut XmlReader) -> Result<COFINSOutr, Box<dyn Error>
 fn parse_PISAliq(reader: &mut XmlReader) -> Result<PISAliq, Box<dyn Error>> {
     let mut pis_aliq: PISAliq = PISAliq::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let tag = e.name();
                 let txt: String = read_text_string(reader, &e)?;
                 match tag.as_ref() {
@@ -2292,9 +2287,9 @@ fn parse_PISAliq(reader: &mut XmlReader) -> Result<PISAliq, Box<dyn Error>> {
                     }
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"PISAliq" => return Ok(pis_aliq),
+            Event::End(e) if e.name().as_ref() == b"PISAliq" => return Ok(pis_aliq),
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("PISAliq".to_string())));
             }
 
@@ -2307,8 +2302,8 @@ fn parse_PISQtde(reader: &mut XmlReader) -> Result<PISQtde, Box<dyn Error>> {
     let mut pis_qtde: PISQtde = PISQtde::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let tag = e.name();
                 let txt: String = read_text_string(reader, &e)?;
                 match tag.as_ref() {
@@ -2323,9 +2318,9 @@ fn parse_PISQtde(reader: &mut XmlReader) -> Result<PISQtde, Box<dyn Error>> {
                     }
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"PISQtde" => return Ok(pis_qtde),
+            Event::End(e) if e.name().as_ref() == b"PISQtde" => return Ok(pis_qtde),
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("PISQtde".to_string())));
             }
 
@@ -2344,8 +2339,8 @@ fn parse_PISOutr(reader: &mut XmlReader) -> Result<PISOutr, Box<dyn Error>> {
     let mut vAliqProd: Option<Decimal> = None;
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let tag = e.name();
                 let txt: String = read_text_string(reader, &e)?;
                 match tag.as_ref() {
@@ -2361,7 +2356,7 @@ fn parse_PISOutr(reader: &mut XmlReader) -> Result<PISOutr, Box<dyn Error>> {
                     _ => {}
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"PISOutr" => {
+            Event::End(e) if e.name().as_ref() == b"PISOutr" => {
                 pis_outr.calculo = if let (Some(vBC), Some(pPIS)) = (vBC, pPIS) {
                     CalculoPISOutr::Aliquota {
                         vBC: vBC,
@@ -2378,7 +2373,7 @@ fn parse_PISOutr(reader: &mut XmlReader) -> Result<PISOutr, Box<dyn Error>> {
                 return Ok(pis_outr);
             }
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("PISOutr".to_string())));
             }
 
@@ -2395,8 +2390,8 @@ fn parse_IPITrib(reader: &mut XmlReader) -> Result<IPITrib, Box<dyn Error>> {
     let mut vUnid: Option<Decimal> = None;
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let name = e.name();
                 let txt = read_text_string(reader, &e)?;
 
@@ -2413,7 +2408,7 @@ fn parse_IPITrib(reader: &mut XmlReader) -> Result<IPITrib, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"IPITrib" => {
+            Event::End(e) if e.name().as_ref() == b"IPITrib" => {
                 // Tenta construir a variante 'Aliquota'
                 if let (Some(vbc_val), Some(pipi_val)) = (vBC, pIPI) {
                     ipi_trib.calculo = CalculoIpi::Aliquota {
@@ -2434,7 +2429,7 @@ fn parse_IPITrib(reader: &mut XmlReader) -> Result<IPITrib, Box<dyn Error>> {
                 return Ok(ipi_trib);
             }
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("IPITrib".to_string())));
             }
 
@@ -2446,8 +2441,8 @@ fn parse_IPITrib(reader: &mut XmlReader) -> Result<IPITrib, Box<dyn Error>> {
 fn parse_enderEmit(reader: &mut XmlReader, end_tag: &[u8]) -> Result<EnderEmi, Box<dyn Error>> {
     let mut enderEmi: EnderEmi = EnderEmi::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let name = e.name();
                 let txt: String = read_text_string(reader, &e)?;
 
@@ -2467,9 +2462,9 @@ fn parse_enderEmit(reader: &mut XmlReader, end_tag: &[u8]) -> Result<EnderEmi, B
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == end_tag => return Ok(enderEmi),
+            Event::End(e) if e.name().as_ref() == end_tag => return Ok(enderEmi),
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(String::from_utf8_lossy(end_tag).to_string())));
             }
             _ => {}
@@ -2480,8 +2475,8 @@ fn parse_enderEmit(reader: &mut XmlReader, end_tag: &[u8]) -> Result<EnderEmi, B
 fn parse_TLocal(reader: &mut XmlReader, end_tag: &[u8]) -> Result<Local, Box<dyn Error>> {
     let mut local = Local::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     // Tratamento da <choice> de identificação
@@ -2508,8 +2503,8 @@ fn parse_TLocal(reader: &mut XmlReader, end_tag: &[u8]) -> Result<Local, Box<dyn
                 }
             }
             // Usa o argumento 'end_tag' para a condição de parada
-            Ok(Event::End(e)) if e.name().as_ref() == end_tag => return Ok(local),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof(String::from_utf8_lossy(end_tag).to_string()))),
+            Event::End(e) if e.name().as_ref() == end_tag => return Ok(local),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof(String::from_utf8_lossy(end_tag).to_string()))),
             _ => (),
         }
     }
@@ -2517,8 +2512,8 @@ fn parse_TLocal(reader: &mut XmlReader, end_tag: &[u8]) -> Result<Local, Box<dyn
 
 fn parse_nfref(reader: &mut XmlReader) -> Result<NFRef, Box<dyn Error>> {
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"refNF" => return parse_refNF(reader),
                 b"refNFP" => return parse_refNFP(reader),
                 b"refECF" => return parse_refECF(reader),
@@ -2536,7 +2531,7 @@ fn parse_nfref(reader: &mut XmlReader) -> Result<NFRef, Box<dyn Error>> {
                 }
             },
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("NFref".to_string()))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("NFref".to_string()))),
             _ => {}
         }
     }
@@ -2547,8 +2542,8 @@ fn parse_refNF(reader: &mut XmlReader) -> Result<NFRef, Box<dyn Error>> {
     let mut refNF: RefNFData = RefNFData::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"cUF" => refNF.cUF = txt.parse::<u8>()?,
@@ -2563,11 +2558,11 @@ fn parse_refNF(reader: &mut XmlReader) -> Result<NFRef, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"refNF" => {
+            Event::End(e) if e.name().as_ref() == b"refNF" => {
                 return Ok(NFRef::refNF(refNF));
             }
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 log::error!("Unexpected Eof while parsing refNF");
                 break;
             }
@@ -2581,8 +2576,8 @@ fn parse_refNFP(reader: &mut XmlReader) -> Result<NFRef, Box<dyn Error>> {
     let mut refNFP: RefNFPData = RefNFPData::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"cUF" => refNFP.cUF = txt.parse::<u8>()?,
@@ -2599,11 +2594,11 @@ fn parse_refNFP(reader: &mut XmlReader) -> Result<NFRef, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"refNFP" => {
+            Event::End(e) if e.name().as_ref() == b"refNFP" => {
                 return Ok(NFRef::refNFP(refNFP));
             }
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 log::error!("Unexpected Eof while parsing refNFP");
                 break;
             }
@@ -2617,8 +2612,8 @@ fn parse_refECF(reader: &mut XmlReader) -> Result<NFRef, Box<dyn Error>> {
     let mut refECF: RefECFData = RefECFData::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"mod" => refECF.r#mod = txt,
@@ -2630,11 +2625,11 @@ fn parse_refECF(reader: &mut XmlReader) -> Result<NFRef, Box<dyn Error>> {
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"refECF" => {
+            Event::End(e) if e.name().as_ref() == b"refECF" => {
                 return Ok(NFRef::refECF(refECF));
             }
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 log::error!("Unexpected Eof while parsing refECF");
                 break;
             }
@@ -2648,8 +2643,8 @@ fn parse_gCompraGov(reader: &mut XmlReader) -> Result<CompraGov, Box<dyn Error>>
     let mut cg: CompraGov = CompraGov::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt: String = read_text_string(reader, &e)?;
 
                 match e.name().as_ref() {
@@ -2666,17 +2661,16 @@ fn parse_gCompraGov(reader: &mut XmlReader) -> Result<CompraGov, Box<dyn Error>>
                 }
             }
 
-            Ok(Event::End(e)) if e.name().as_ref() == b"gCompraGov" => {
+            Event::End(e) if e.name().as_ref() == b"gCompraGov" => {
                 return Ok(cg);
             }
 
-            Ok(Event::Eof) => {
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof(
                     "gCompraGov".to_string(),
                 )));
             }
 
-            Err(e) => log::error!("Error reading gCompraGov: {}", e),
             _ => {}
         }
     }
@@ -2687,20 +2681,19 @@ fn parse_gPagAntecipado(reader: &mut XmlReader) -> Result<Vec<String>, Box<dyn E
     let mut refNfes: Vec<String> = Vec::new();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 if e.name().as_ref() == b"refNFe" {
                     refNfes.push(read_text_string(reader, &e)?);
                 }
             }
 
             // Tag terminou
-            Ok(Event::End(e)) if e.name().as_ref() == b"gPagAntecipado" => 
+            Event::End(e) if e.name().as_ref() == b"gPagAntecipado" => 
                 return Ok(refNfes),
 
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gPagAntecipado".to_string(),))),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gPagAntecipado".to_string(),))),
 
-            Err(e) => return Err(Box::new(e)),
             _ => {}
         }
     }
@@ -2713,18 +2706,17 @@ fn get_mod_nfe(xml_bytes: &String) -> Result<ModNfe, Box<dyn Error>> {
     let mut inside_mod: bool = false;
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"mod" => {
+        match reader.read_event()? {
+            Event::Start(e) if e.name().as_ref() == b"mod" => {
                 inside_mod = true;
             }
 
-            Ok(Event::Text(e)) if inside_mod => {
+            Event::Text(e) if inside_mod => {
                 let txt: String = e.decode()?.into_owned();
                 return Ok(ModNfe::from(txt.as_str()));
             }
 
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(Box::new(e)),
+            Event::Eof => break,
             _ => {}
         }
     }

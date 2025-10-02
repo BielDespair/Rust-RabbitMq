@@ -40,8 +40,8 @@ pub struct Card {
 pub fn parse_pag(reader: &mut XmlReader) -> Result<Pag, Box<dyn Error>> {
     let mut pag = Pag::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 // Adiciona cada ocorrência de <detPag> ao vetor
                 b"detPag" => {
                     pag.detPag.get_or_insert_with(Vec::new).push(parse_detPag(reader)?);
@@ -54,8 +54,8 @@ pub fn parse_pag(reader: &mut XmlReader) -> Result<Pag, Box<dyn Error>> {
                 }
                 _ => (),
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"pag" => return Ok(pag),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("pag".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"pag" => return Ok(pag),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("pag".to_string()))),
             _ => (),
         }
     }
@@ -66,8 +66,8 @@ pub fn parse_pag(reader: &mut XmlReader) -> Result<Pag, Box<dyn Error>> {
 fn parse_detPag(reader: &mut XmlReader) -> Result<DetPag, Box<dyn Error>> {
     let mut det_pag = DetPag::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"card" => det_pag.card = Some(parse_card(reader)?),
                 name => {
                     let txt = read_text_string(reader, &e)?;
@@ -83,8 +83,8 @@ fn parse_detPag(reader: &mut XmlReader) -> Result<DetPag, Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"detPag" => return Ok(det_pag),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("detPag".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"detPag" => return Ok(det_pag),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("detPag".to_string()))),
             _ => (),
         }
     }
@@ -93,8 +93,8 @@ fn parse_detPag(reader: &mut XmlReader) -> Result<DetPag, Box<dyn Error>> {
 fn parse_card(reader: &mut XmlReader) -> Result<Card, Box<dyn Error>> {
     let mut card = Card::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"tpIntegra" => card.tpIntegra = txt,
@@ -106,8 +106,8 @@ fn parse_card(reader: &mut XmlReader) -> Result<Card, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"card" => return Ok(card),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("card".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"card" => return Ok(card),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("card".to_string()))),
             _ => (),
         }
     }

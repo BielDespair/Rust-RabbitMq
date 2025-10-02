@@ -137,8 +137,8 @@ pub struct IBSCBSTot {
 pub fn parse_total(reader: &mut XmlReader) -> Result<Total, Box<dyn Error>> {
     let mut total: Total = Total::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"ICMSTot" => total.ICMSTot = parse_ICMSTot(reader)?,
                 b"ISSQNtot" => total.ISSQNtot = Some(parse_ISSQNtot(reader)?),
                 b"retTrib" => total.retTrib = Some(parse_retTrib(reader)?),
@@ -147,8 +147,8 @@ pub fn parse_total(reader: &mut XmlReader) -> Result<Total, Box<dyn Error>> {
                 b"vNFTot" => total.vNFTot = Some(read_text_string(reader, &e)?.parse::<Decimal>()?),
                 _ => (),
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"total" => return Ok(total),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("total".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"total" => return Ok(total),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("total".to_string()))),
             _ => (),
         }
     }
@@ -157,8 +157,8 @@ pub fn parse_total(reader: &mut XmlReader) -> Result<Total, Box<dyn Error>> {
 fn parse_ICMSTot(reader: &mut XmlReader) -> Result<ICMSTot, Box<dyn Error>> {
     let mut g: ICMSTot = ICMSTot::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"vBC" => g.vBC = txt.parse::<Decimal>()?,
@@ -193,8 +193,8 @@ fn parse_ICMSTot(reader: &mut XmlReader) -> Result<ICMSTot, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"ICMSTot" => return Ok(g),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"ICMSTot" => return Ok(g),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("ICMSTot".to_string())));
             }
             _ => (),
@@ -205,8 +205,8 @@ fn parse_ICMSTot(reader: &mut XmlReader) -> Result<ICMSTot, Box<dyn Error>> {
 fn parse_ISSQNtot(reader: &mut XmlReader) -> Result<ISSQNtot, Box<dyn Error>> {
     let mut g: ISSQNtot = ISSQNtot::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"vServ" => g.vServ = Some(txt.parse::<Decimal>()?),
@@ -224,8 +224,8 @@ fn parse_ISSQNtot(reader: &mut XmlReader) -> Result<ISSQNtot, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"ISSQNtot" => return Ok(g),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"ISSQNtot" => return Ok(g),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("ISSQNtot".to_string())));
             }
             _ => (),
@@ -236,8 +236,8 @@ fn parse_ISSQNtot(reader: &mut XmlReader) -> Result<ISSQNtot, Box<dyn Error>> {
 fn parse_retTrib(reader: &mut XmlReader) -> Result<RetTrib, Box<dyn Error>> {
     let mut g: RetTrib = RetTrib::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"vRetPIS" => g.vRetPIS = Some(txt.parse::<Decimal>()?),
@@ -250,8 +250,8 @@ fn parse_retTrib(reader: &mut XmlReader) -> Result<RetTrib, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"retTrib" => return Ok(g),
-            Ok(Event::Eof) => {
+            Event::End(e) if e.name().as_ref() == b"retTrib" => return Ok(g),
+            Event::Eof => {
                 return Err(Box::new(ParseError::UnexpectedEof("retTrib".to_string())));
             }
             _ => (),
@@ -262,12 +262,12 @@ fn parse_retTrib(reader: &mut XmlReader) -> Result<RetTrib, Box<dyn Error>> {
 fn parse_ISTot(reader: &mut XmlReader) -> Result<ISTot, Box<dyn Error>> {
     let mut g: ISTot = ISTot::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"vIS" => {
+        match reader.read_event()? {
+            Event::Start(e) if e.name().as_ref() == b"vIS" => {
                 g.vIS = read_text_string(reader, &e)?.parse::<Decimal>()?;
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"ISTot" => return Ok(g),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("ISTot".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"ISTot" => return Ok(g),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("ISTot".to_string()))),
             _ => (),
         }
     }
@@ -277,8 +277,8 @@ fn parse_ISTot(reader: &mut XmlReader) -> Result<ISTot, Box<dyn Error>> {
 fn parse_IBSCBSTot(reader: &mut XmlReader) -> Result<IBSCBSTot, Box<dyn Error>> {
     let mut g: IBSCBSTot = IBSCBSTot::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 match e.name().as_ref() {
                     b"gIBS" => g.gIBS = Some(parse_GIBSTot(reader)?),
                     b"gCBS" => g.gCBS = Some(parse_GCBSTot(reader)?),
@@ -287,8 +287,8 @@ fn parse_IBSCBSTot(reader: &mut XmlReader) -> Result<IBSCBSTot, Box<dyn Error>> 
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"IBSCBSTot" => return Ok(g),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("IBSCBSTot".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"IBSCBSTot" => return Ok(g),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("IBSCBSTot".to_string()))),
             _ => (),
         }
     }
@@ -299,8 +299,8 @@ fn parse_IBSCBSTot(reader: &mut XmlReader) -> Result<IBSCBSTot, Box<dyn Error>> 
 fn parse_GIBSTot(reader: &mut XmlReader) -> Result<GIBSTot, Box<dyn Error>> {
     let mut g: GIBSTot = GIBSTot::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"gIBSUF" => g.gIBSUF = parse_GIBSTotUF(reader)?,
                 b"gIBSMun" => g.gIBSMun = parse_GIBSTotMun(reader)?,
                 name => {
@@ -313,8 +313,8 @@ fn parse_GIBSTot(reader: &mut XmlReader) -> Result<GIBSTot, Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"gIBS" => return Ok(g),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gIBS".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"gIBS" => return Ok(g),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gIBS".to_string()))),
             _ => (),
         }
     }
@@ -323,8 +323,8 @@ fn parse_GIBSTot(reader: &mut XmlReader) -> Result<GIBSTot, Box<dyn Error>> {
 fn parse_GCBSTot(reader: &mut XmlReader) -> Result<GCBSTot, Box<dyn Error>> {
     let mut g: GCBSTot = GCBSTot::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"vDif" => g.vDif = txt.parse()?,
@@ -335,8 +335,8 @@ fn parse_GCBSTot(reader: &mut XmlReader) -> Result<GCBSTot, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gCBS" => return Ok(g),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gCBS".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"gCBS" => return Ok(g),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gCBS".to_string()))),
             _ => (),
         }
     }
@@ -345,8 +345,8 @@ fn parse_GCBSTot(reader: &mut XmlReader) -> Result<GCBSTot, Box<dyn Error>> {
 fn parse_GMonoTot(reader: &mut XmlReader) -> Result<GMonoTot, Box<dyn Error>> {
     let mut g = GMonoTot::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"vIBSMono" => g.vIBSMono = txt.parse()?,
@@ -358,8 +358,8 @@ fn parse_GMonoTot(reader: &mut XmlReader) -> Result<GMonoTot, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gMono" => return Ok(g),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gMono".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"gMono" => return Ok(g),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gMono".to_string()))),
             _ => (),
         }
     }
@@ -368,8 +368,8 @@ fn parse_GMonoTot(reader: &mut XmlReader) -> Result<GMonoTot, Box<dyn Error>> {
 fn parse_GIBSTotUF(reader: &mut XmlReader) -> Result<GIBSTotUF, Box<dyn Error>> {
     let mut g: GIBSTotUF = GIBSTotUF::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"vDif" => g.vDif = txt.parse::<Decimal>()?,
@@ -378,8 +378,8 @@ fn parse_GIBSTotUF(reader: &mut XmlReader) -> Result<GIBSTotUF, Box<dyn Error>> 
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gIBSUF" => return Ok(g),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gIBSUF".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"gIBSUF" => return Ok(g),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gIBSUF".to_string()))),
             _ => (),
         }
     }
@@ -388,8 +388,8 @@ fn parse_GIBSTotUF(reader: &mut XmlReader) -> Result<GIBSTotUF, Box<dyn Error>> 
 fn parse_GIBSTotMun(reader: &mut XmlReader) -> Result<GIBSTotMun, Box<dyn Error>> {
     let mut g: GIBSTotMun = GIBSTotMun::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"vDif" => g.vDif = txt.parse::<Decimal>()?,
@@ -398,8 +398,8 @@ fn parse_GIBSTotMun(reader: &mut XmlReader) -> Result<GIBSTotMun, Box<dyn Error>
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"gIBSMun" => return Ok(g),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("gIBSMun".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"gIBSMun" => return Ok(g),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("gIBSMun".to_string()))),
             _ => (),
         }
     }

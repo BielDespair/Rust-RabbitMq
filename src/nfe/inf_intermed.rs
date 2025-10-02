@@ -17,8 +17,8 @@ pub struct InfIntermed {
 pub fn parse_infIntermed(reader: &mut XmlReader) -> Result<InfIntermed, Box<dyn Error>> {
     let mut inf_intermed: InfIntermed = InfIntermed::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt: String = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"CNPJ" => inf_intermed.CNPJ = txt,
@@ -26,8 +26,8 @@ pub fn parse_infIntermed(reader: &mut XmlReader) -> Result<InfIntermed, Box<dyn 
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"infIntermed" => return Ok(inf_intermed),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("infIntermed".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"infIntermed" => return Ok(inf_intermed),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("infIntermed".to_string()))),
             _ => (),
         }
     }

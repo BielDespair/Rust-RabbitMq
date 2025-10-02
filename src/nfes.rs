@@ -2,7 +2,7 @@
 use rust_decimal::Decimal;
 use serde::{Serialize};
 
-use crate::{det::impostoDevol::ImpostoDevol, impostos::{cofins::COFINS, cofins_st::COFINSST, ibs_cbs::IBSCBS, icms::Icms, icms_uf_dest::ICMSUFDest, ii::Ii, ipi::Ipi, is::IS, issqn::ISSQN, pis::PIS, pis_st::PISST}, nfe::{cobr::Cobr, compra::Compra, exporta::Exporta, infAdic::InfAdic, inf_intermed::InfIntermed, pag::Pag, total::Total, transp::Transp}};
+use crate::{det::impostoDevol::ImpostoDevol, impostos::{cofins::COFINS, cofins_st::COFINSST, ibs_cbs::IBSCBS, icms::Icms, icms_uf_dest::ICMSUFDest, ii::Ii, ipi::Ipi, is::IS, issqn::ISSQN, pis::PIS, pis_st::PISST}, nfe::{agropecuario::Agropecuario, cana::Cana, cobr::Cobr, compra::Compra, exporta::Exporta, infAdic::InfAdic, inf_intermed::InfIntermed, inf_resp_tec::TInfRespTec, pag::Pag, total::Total, transp::Transp}};
 
 
 
@@ -31,6 +31,10 @@ pub struct NFe {
     pub infAdic: Option<InfAdic>,
     pub exporta: Option<Exporta>,
     pub compra: Option<Compra>,
+    pub cana: Option<Cana>,
+    pub infRespTec: Option<TInfRespTec>,
+    pub infSolicNFF: Option<String>,
+    pub agropecuario: Option<Agropecuario>,
 }
 
 #[derive(Debug, Default, Serialize)]

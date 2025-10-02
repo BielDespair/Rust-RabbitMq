@@ -19,8 +19,8 @@ pub struct Exporta {
 pub fn parse_exporta(reader: &mut XmlReader) -> Result<Exporta, Box<dyn Error>> {
     let mut exporta = Exporta::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"UFSaidaPais" => exporta.UFSaidaPais = UF::from(txt.as_str()),
@@ -29,8 +29,8 @@ pub fn parse_exporta(reader: &mut XmlReader) -> Result<Exporta, Box<dyn Error>> 
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"exporta" => return Ok(exporta),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("exporta".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"exporta" => return Ok(exporta),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("exporta".to_string()))),
             _ => (),
         }
     }

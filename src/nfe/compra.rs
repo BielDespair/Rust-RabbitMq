@@ -22,8 +22,8 @@ pub struct Compra {
 pub fn parse_compra(reader: &mut XmlReader) -> Result<Compra, Box<dyn Error>> {
     let mut compra: Compra = Compra::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"xNEmp" => compra.xNEmp = Some(txt),
@@ -32,8 +32,8 @@ pub fn parse_compra(reader: &mut XmlReader) -> Result<Compra, Box<dyn Error>> {
                     _ => (), // Ignora tags desconhecidas dentro de <compra>
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"compra" => return Ok(compra),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("compra".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"compra" => return Ok(compra),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("compra".to_string()))),
             _ => (),
         }
     }

@@ -38,8 +38,8 @@ pub struct ProcRef {
 pub fn parse_infAdic(reader: &mut XmlReader) -> Result<InfAdic, Box<dyn Error>> {
     let mut inf_adic = InfAdic::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match reader.read_event()? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"obsCont" => {
                     inf_adic.obsCont.get_or_insert_with(Vec::new).push(parse_obsCont(reader, &e)?);
                 }
@@ -58,8 +58,8 @@ pub fn parse_infAdic(reader: &mut XmlReader) -> Result<InfAdic, Box<dyn Error>> 
                     }
                 }
             },
-            Ok(Event::End(e)) if e.name().as_ref() == b"infAdic" => return Ok(inf_adic),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("infAdic".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"infAdic" => return Ok(inf_adic),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("infAdic".to_string()))),
             _ => (),
         }
     }
@@ -68,20 +68,19 @@ pub fn parse_infAdic(reader: &mut XmlReader) -> Result<InfAdic, Box<dyn Error>> 
 fn parse_obsCont(reader: &mut XmlReader, e: &BytesStart) -> Result<ObsCont, Box<dyn Error>> {
     let mut obs: ObsCont = ObsCont::default();
 
-    // 1. Lê o atributo 'xCampo' da tag de abertura <obsCont>
     let attr = e.try_get_attribute(b"xCampo")?
         .ok_or("Atributo 'xCampo' obrigatório não encontrado em <obsCont>")?;
     obs.xCampo = attr.unescape_value()?.into_owned();
 
     // 2. Loop para ler o conteúdo interno
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"xTexto" => {
+        match reader.read_event()? {
+            Event::Start(e) if e.name().as_ref() == b"xTexto" => {
                 obs.xTexto = read_text_string(reader, &e)?;
             }
             // Encerra ao encontrar a tag de fechamento </obsCont>
-            Ok(Event::End(e)) if e.name().as_ref() == b"obsCont" => return Ok(obs),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("obsCont".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"obsCont" => return Ok(obs),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("obsCont".to_string()))),
             _ => (),
         }
     }
@@ -95,11 +94,11 @@ fn parse_obsFisco(reader: &mut XmlReader, e: &BytesStart) -> Result<ObsFisco, Bo
     obs.xCampo = attr.unescape_value()?.into_owned();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e_inner)) if e_inner.name().as_ref() == b"xTexto" => {
-                obs.xTexto = read_text_string(reader, &e_inner)?;
+        match reader.read_event()? {
+            Event::Start(e) if e.name().as_ref() == b"xTexto" => {
+                obs.xTexto = read_text_string(reader, &e)?;
             }
-            Ok(Event::End(e_inner)) if e_inner.name().as_ref() == b"obsFisco" => return Ok(obs),
+            Event::Start(e) if e.name().as_ref() == b"obsFisco" => return Ok(obs),
             _ => (),
         }
     }
@@ -108,8 +107,8 @@ fn parse_obsFisco(reader: &mut XmlReader, e: &BytesStart) -> Result<ObsFisco, Bo
 fn parse_procRef(reader: &mut XmlReader) -> Result<ProcRef, Box<dyn Error>> {
     let mut proc_ref = ProcRef::default();
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => {
+        match reader.read_event()? {
+            Event::Start(e) => {
                 let txt = read_text_string(reader, &e)?;
                 match e.name().as_ref() {
                     b"nProc" => proc_ref.nProc = txt,
@@ -118,8 +117,8 @@ fn parse_procRef(reader: &mut XmlReader) -> Result<ProcRef, Box<dyn Error>> {
                     _ => (),
                 }
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"procRef" => return Ok(proc_ref),
-            Ok(Event::Eof) => return Err(Box::new(ParseError::UnexpectedEof("procRef".to_string()))),
+            Event::End(e) if e.name().as_ref() == b"procRef" => return Ok(proc_ref),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("procRef".to_string()))),
             _ => (),
         }
     }

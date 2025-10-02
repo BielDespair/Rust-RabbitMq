@@ -6087,9 +6087,10 @@ Operação interestadual para consumidor final com partilha do ICMS  devido na o
 									</xs:element>
 									<xs:element name="obsCont" minOccurs="0" maxOccurs="10">
 										<xs:annotation>
-											<xs:documentation>Campo de uso livre do contribuinte
-informar o nome do campo no atributo xCampo
-e o conteúdo do campo no xTexto</xs:documentation>
+											<xs:documentation>
+												Campo de uso livre do contribuinte
+												informar o nome do campo no atributo xCampo
+												e o conteúdo do campo no xTexto</xs:documentation>
 										</xs:annotation>
 										<xs:complexType>
 											<xs:sequence>
