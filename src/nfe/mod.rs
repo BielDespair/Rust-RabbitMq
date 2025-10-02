@@ -1,3 +1,5 @@
+pub mod det;
+pub mod impostos;
 
 pub mod common;
 pub mod total;

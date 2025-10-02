@@ -1589,6 +1589,7 @@ dependencies = [
  "amqp_serde",
  "amqprs",
  "async-trait",
+ "bytes",
  "dotenv",
  "futures",
  "log",

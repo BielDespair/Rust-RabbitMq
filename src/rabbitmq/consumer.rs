@@ -1,4 +1,4 @@
-use std::{sync::{atomic::AtomicUsize, Arc}, thread::{self, ThreadId}};
+use std::{error::Error, fs, sync::{Arc}, time::Duration};
 
 use amqprs::{
     channel::{
@@ -6,156 +6,199 @@ use amqprs::{
     }, connection::Connection, consumer::AsyncConsumer, BasicProperties, Deliver
 };
 use async_trait::async_trait;
-use tokio::sync::Mutex;
+use bytes::Bytes;
+use tokio::{time::sleep};
 
-use crate::rabbitmq::{self, common::RabbitVariables};
+use crate::{minio_client, nfe_parser::parse_nfe, rabbitmq::{self, common::{Message, RabbitVariables}}};
 
 
+// Implementa async consumer
 pub struct XmlConsumer {
-    manual_ack: bool,
-    producer_channels: Arc<Mutex<Vec<Channel>>>,
-    total_consumed: Arc<AtomicUsize>,
-    publish_args: BasicPublishArguments
+    publish_args: BasicPublishArguments,
+    publish_channel: Channel,
+    bucket_name: String,
+}
+
+impl XmlConsumer {
+    pub async fn new(variables: &RabbitVariables, bucket_name: &String, connection: &Connection) -> Result<XmlConsumer, Box<dyn Error>> {
+
+        let args: BasicPublishArguments = BasicPublishArguments {
+            exchange: variables.exchange.clone(),
+            routing_key: variables.routing_key.clone(),
+            mandatory: false,
+            immediate: false
+        };
+
+        let channel: Channel = rabbitmq::common::initialize_channel(&variables.publish_queue, &variables.routing_key, &variables.exchange, &connection).await?;
+
+        Ok(Self {
+            publish_args: args,
+            publish_channel: channel,
+            bucket_name: bucket_name.clone(),
+        })
+    }
 }
 
 pub struct RabbitMqConsumer {
-    rabbit_variables: RabbitVariables,
+    variables: RabbitVariables,
     minio_bucket_name: String,
     connection: Arc<Connection>,
     consumer_channels: Vec<Channel>,
-    producer_channels: Arc<Mutex<Vec<Channel>>>,
-    total_consumed: Arc<AtomicUsize>,
 }
 
 impl RabbitMqConsumer {
-    pub async fn new(rabbit_variables: RabbitVariables, minio_bucket_name: String, connection: Arc<Connection>) -> Self {
+    pub async fn new(variables: RabbitVariables, minio_bucket_name: String) -> Self {
 
-        let counter = Arc::new(AtomicUsize::new(0));
+        let connection: Arc<Connection> = rabbitmq::common::connect_rabbitmq(&variables).await;
         Self {
-            rabbit_variables: rabbit_variables,
+            variables: variables,
             minio_bucket_name: minio_bucket_name,
             connection: connection,
             consumer_channels: Vec::new(),
-            producer_channels: Arc::new(Mutex::new(Vec::new())),
-            total_consumed: counter
+        }
+
+
+    }
+
+    pub async fn start(&mut self) {
+        if self.connection.is_open() {
+            self.initialize_channels().await;
+            self.register_consuming_channels().await.ok();
+        }
+
+        loop {
+            if !self.connection.is_open() {
+                log::warn!("Connection closed, restarting...");
+                match self.restart().await {
+                    Ok(_) => log::info!("Restart successful."),
+                    Err(e) => log::error!("Failed to restart: {}", e),
+                }
+            }
+            sleep(Duration::from_secs(5)).await;
         }
     }
 
-    pub async fn start_consuming(&mut self) {
-        if self.connection.is_open() {
-            self.initialize_channels().await;
-            self.register_consuming_channels().await;
-        }
+    async fn restart(&mut self) -> Result<(), Box<dyn Error>> {
+        self.consumer_channels.clear();
+        self.connection = rabbitmq::common::connect_rabbitmq(&self.variables).await;
+        self.initialize_channels().await;
+        self.register_consuming_channels().await?;
+        Ok(())
+    
     }
 
     async fn initialize_channels(&mut self) {
-        rabbitmq::common::initialize_channels(&self.rabbit_variables, &self.connection, &mut self.consumer_channels)
-            .await;
-
-        let mut producer_channels = self.producer_channels.lock().await;
-        rabbitmq::common::initialize_channels(&self.rabbit_variables, &self.connection, &mut producer_channels).await;
-
-    }
-
-    async fn register_consuming_channels(&self) {
-        for channel in self.consumer_channels.iter() {
-            // Consumer tag deve vir de rabbit variables.
-            let args: BasicConsumeArguments =
-                BasicConsumeArguments::new(&self.rabbit_variables.queue_name, "parser-xml")
-                    .manual_ack(true)
-                    .finish();
-
-            let counter = self.total_consumed.clone();
-            let producer_channels: Arc<Mutex<Vec<Channel>>> = self.producer_channels.clone();
-            let publish_args: BasicPublishArguments = BasicPublishArguments::new(&self.rabbit_variables.queue_name, &self.rabbit_variables.consumer);
-            let consume: XmlConsumer = XmlConsumer { 
-                manual_ack: true,
-                total_consumed: counter,
-                producer_channels: producer_channels,
-                publish_args: publish_args.clone()
-            };
-            let tag = channel.basic_consume(consume, args).await;
-
-            match tag {
-                Ok(content) => log::info!("Consumer connected with tag {}", content),
-                Err(e) => log::info!("Failed to connect consumer: {}", e),
+        match rabbitmq::common::initialize_channels(
+            &self.variables.consume_queue,
+            &self.variables.routing_key,
+            &mut self.variables.exchange,
+            self.variables.num_channels,
+             &self.connection).await {
+            Ok(v) => self.consumer_channels = v,
+            Err(e) => {
+                log::error!("Failed to initialize channels: {}", e);
             }
         }
     }
 
-    pub async fn reset_connection(&mut self, conn:Arc<Connection>) {
-        self.connection = conn;
-        self.consumer_channels.clear();
-        self.producer_channels.lock().await.clear();
-    }
+    async fn register_consuming_channels(&self) -> Result<(), Box<dyn Error>> {
+        for channel in self.consumer_channels.iter() {
+            // Consumer tag deve vir de rabbit variables.
+            let args: BasicConsumeArguments =
+                BasicConsumeArguments::new(
+                    &self.variables.consume_queue,
+                    "parser-xml")
+                    .manual_ack(true).finish();
+            
 
+            let consume: XmlConsumer = XmlConsumer::new(&self.variables, &self.minio_bucket_name, &self.connection).await?;
+            channel.basic_consume(consume, args).await?;
+        }
+        log::debug!("Successfully registered consuming channels");
+        Ok(())
+    }
 }
 
 impl XmlConsumer {
     async fn publish (&self, message: Vec<u8> ) -> bool {
         
-        let channel = match self.get_publisher_channel().await {
-            Some(ch) => ch,
-            None => return false,
-        };
-
-        let json: String = "{\"body\": \"Hello, World!\"}".to_string();
-        let result = channel.basic_publish(
+        let result = self.publish_channel.basic_publish(
             BasicProperties::default(), message, self.publish_args.clone()).await;
 
         match result {
-            Ok(_) => return true,
+            Ok(_) => {
+                log::info!("Successfully published message");
+                return true;
+            }
             Err(e) => {
                 log::error!("Failed to publish message: {}", e);
                 return false;
             }
         }
-
-        log::info!("Successfully published message");
-        return true;
     }
 
-    async fn get_publisher_channel(&self) -> Option<Channel> {
-        loop {
-            let mut channels = self.producer_channels.lock().await;
-            if let Some(ch) = channels.iter_mut().find(|ch| ch.is_open()).cloned() {
-                return Some(ch);
-            }
-            drop(channels); // libera o lock
-            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
-        }
+}
+impl Drop for XmlConsumer {
+    fn drop(&mut self) {
+        println!("XmlConsumer is being dropped!");
     }
 }
 #[async_trait]
 impl AsyncConsumer for XmlConsumer {
-    async fn consume(
-        &mut self,
-        channel: &Channel,
-        deliver: Deliver,
-        _basic_properties: BasicProperties,
-        content: Vec<u8>,
-    ) {
-        let returned_string = match std::str::from_utf8(&content) {
-            Ok(r) => r,
+    async fn consume(&mut self, channel: &Channel, deliver: Deliver, _basic_properties: BasicProperties, content: Vec<u8>) {
+        
+
+        //let current_thread: ThreadId = thread::current().id();
+        log::info!("Consuming on channel: {}", channel.channel_id());
+
+        let content_json = match std::str::from_utf8(&content) {
+            Ok(v) => v,
             Err(e) => {
-                log::error!("The data received is not valid UTF-8: {e}");
+                log::error!("{}", e);
                 return;
             }
         };
 
-        self.total_consumed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let message: Message = match serde_json::from_str::<Message>(&content_json) {
+            Ok(m) => m,
+            Err(e) => {
+                let content_str = String::from_utf8_lossy(&content);
+                log::error!("Failed to decode message: {} | Content: {}", e, content_str);
+                return;
+            }
+        };
 
-        let total: usize = self.total_consumed.load(std::sync::atomic::Ordering::SeqCst);
-        let current_thread: ThreadId = thread::current().id();
-        log::info!("Consuming message: {} on thread {:?}", total, current_thread);
+        /*
+        let file: Bytes = match minio_client::download_object(&message.file, &self.bucket_name).await {
+            Ok(f) => f,
+            Err(e) => {
+                log::error!("Failed to download MinIO object: {}", e);
+                return;
+            }
+        };
+         */
+        let file: Vec<u8> = fs::read("./data/Mod55.xml").expect("msg");
+        let file: Bytes = Bytes::from(file);
+        
+        
+        let json_bytes: Vec<u8> = match parse_nfe(file, message.company_id, message.org_id) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("Failed to serialize value to JSON bytes: {}", e);
+                return;
+            }
+        };
 
-        self.publish(total).await;
+        self.publish(json_bytes).await;
         
 
 
-        let args = BasicAckArguments::new(deliver.delivery_tag(), false);
+        let args: BasicAckArguments = BasicAckArguments::new(deliver.delivery_tag(), false);
+
         match channel.basic_ack(args).await {
-            Ok(_) => (),
+            Ok(_) => {
+                log::info!("Sucessfully parsed and sended file {}", message.file);
+            }
             Err(e) => {
                 log::error!("Could not send: {e}");
                 return;

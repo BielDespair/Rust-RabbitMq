@@ -2,14 +2,14 @@
 use rust_decimal::Decimal;
 use serde::{Serialize};
 
-use crate::{det::impostoDevol::ImpostoDevol, impostos::{cofins::COFINS, cofins_st::COFINSST, ibs_cbs::IBSCBS, icms::Icms, icms_uf_dest::ICMSUFDest, ii::Ii, ipi::Ipi, is::IS, issqn::ISSQN, pis::PIS, pis_st::PISST}, nfe::{agropecuario::Agropecuario, cana::Cana, cobr::Cobr, compra::Compra, exporta::Exporta, infAdic::InfAdic, inf_intermed::InfIntermed, inf_resp_tec::TInfRespTec, pag::Pag, total::Total, transp::Transp}};
+use crate::{nfe::det::impostoDevol::ImpostoDevol, nfe::impostos::{cofins::COFINS, cofins_st::COFINSST, ibs_cbs::IBSCBS, icms::Icms, icms_uf_dest::ICMSUFDest, ii::Ii, ipi::Ipi, is::IS, issqn::ISSQN, pis::PIS, pis_st::PISST}, nfe::{agropecuario::Agropecuario, cana::Cana, cobr::Cobr, compra::Compra, exporta::Exporta, infAdic::InfAdic, inf_intermed::InfIntermed, inf_resp_tec::TInfRespTec, pag::Pag, total::Total, transp::Transp}};
 
 
 
 #[derive(Debug, Default, Serialize)]
 pub struct NfeJson {
-    pub company_id: i128,
-    pub org_id: i128, 
+    pub company_id: i64,
+    pub org_id: i64, 
     pub nfes: Vec<NFe>,
 }
 #[derive(Debug, Default, Serialize)]

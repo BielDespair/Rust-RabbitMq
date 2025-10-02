@@ -2,7 +2,7 @@
 use rust_decimal::Decimal;
 use serde::Serialize;
 
-use crate::impostos::{cibs::TCIBS, monofasia::TMonofasia};
+use crate::nfe::impostos::{cibs::TCIBS, monofasia::TMonofasia};
 
 
 /// Representa o grupo de Partilha do ICMS entre a UF de origem e destino (<ICMSUFDest>).

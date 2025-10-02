@@ -1,6 +1,6 @@
 
 use std::{env, error::Error, sync::OnceLock};
-
+use bytes::Bytes;
 use minio::s3::{creds::{Provider, StaticProvider}, http::BaseUrl, types::S3Api, Client, ClientBuilder};
 
 pub struct MinioVariables {
@@ -31,15 +31,14 @@ pub fn init_client(variables: &MinioVariables) -> &'static Client {
     })
 }
 
-pub async fn download_object(object: &str, variables: &MinioVariables) -> Result<String, Box<dyn Error>> {
+pub async fn download_object(object: &str, bucket_name: &str) -> Result<Bytes, Box<dyn Error>> {
     let client: &Client = CLIENT.get().expect("Client not initialized");
 
-    let mut resp: minio::s3::response::GetObjectResponse = client.get_object(&variables.bucket_name, object).send().await?;
+    let resp: minio::s3::response::GetObjectResponse = client.get_object(bucket_name, object).send().await?;
 
-    let content_bytes = resp.content.to_segmented_bytes().await?.to_bytes();
-    let content_string: String = String::from_utf8(content_bytes.to_vec())?;
+    let bytes: Bytes = resp.content.to_segmented_bytes().await?.to_bytes();
 
-    Ok(content_string)
+    Ok(bytes)
 }
 
 

@@ -6,6 +6,7 @@ use serde::Serialize;
 use crate::nfes::{EmitenteId, UF};
 
 
+
 #[derive(Debug, Default, Serialize)]
 pub struct Transp {
     /// Modalidade do frete.

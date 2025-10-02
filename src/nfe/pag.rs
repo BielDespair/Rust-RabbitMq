@@ -9,6 +9,7 @@ use serde::Serialize;
 use crate::{nfe::common::{read_text_string, ParseError, XmlReader}, nfes::UF};
 
 
+
 #[derive(Debug, Default, Serialize)]
 pub struct Pag {
     pub detPag: Option<Vec<DetPag>>,

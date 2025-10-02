@@ -98,7 +98,9 @@ fn parse_obsFisco(reader: &mut XmlReader, e: &BytesStart) -> Result<ObsFisco, Bo
             Event::Start(e) if e.name().as_ref() == b"xTexto" => {
                 obs.xTexto = read_text_string(reader, &e)?;
             }
-            Event::Start(e) if e.name().as_ref() == b"obsFisco" => return Ok(obs),
+            Event::End(e) if e.name().as_ref() == b"obsFisco" => return Ok(obs),
+
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("obsFisco".to_string()))),
             _ => (),
         }
     }

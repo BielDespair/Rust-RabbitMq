@@ -2,6 +2,7 @@
 use core::panic;
 use std::{error::Error};
 
+use bytes::Bytes;
 use quick_xml::{
     Reader,
     events::{BytesStart, Event},
@@ -9,7 +10,7 @@ use quick_xml::{
 use rust_decimal::Decimal;
 
 use crate::{
-    det::impostoDevol::{ImpostoDevol, IpiDevol}, impostos::{
+    nfe::det::impostoDevol::{ImpostoDevol, IpiDevol}, nfe::impostos::{
         cibs::{
             GIBSMun, TCredPres, TDevTrib, TDif, TRed, TTribCompraGov, TTribRegular, ValorCredPres, GCBS, GIBSUF, TCIBS
         },
@@ -51,30 +52,27 @@ impl From<&str> for ModNfe {
 }
 
 
-pub fn parse_nfe(
-    xml_bytes: String,
-    company_id: i128,
-    org_id: i128,
-) -> Result<String, Box<dyn Error>> {
-    let modelo: ModNfe = get_mod_nfe(&xml_bytes)?;
+pub fn parse_nfe(xml: Bytes, company_id: i64, org_id: i64) -> Result<Vec<u8>, Box<dyn Error>> {
+    let modelo: ModNfe = get_mod_nfe(&xml)?;
 
-    match modelo {
-        // Modelo 55 e 65 são compatíveis para o parser
-        ModNfe::Mod55 => return parse_nfe_mod_65(xml_bytes, company_id, org_id),
-        ModNfe::Mod65 => return parse_nfe_mod_65(xml_bytes, company_id, org_id),
-        ModNfe::Mod57 => return parse_nfe_mod_57(xml_bytes),
-        ModNfe::Desconhecido => Err(ParseError::ModeloDesconhecido.into()),
-    }
+    let mut nfe: NfeJson = match modelo {
+        ModNfe::Mod55 => parse_nfe_mod_65(xml)?,
+        ModNfe::Mod65 => parse_nfe_mod_65(xml)?,
+        ModNfe::Mod57 => parse_nfe_mod_57(xml)?,
+        ModNfe::Desconhecido => return Err(ParseError::ModeloDesconhecido.into()),
+    };
+
+    nfe.company_id = company_id;
+    nfe.org_id = org_id;
+    
+    return Ok(serde_json::to_vec(&nfe)?);
 }
 
-fn parse_nfe_mod_65(xml: String, company_id: i128, org_id: i128) -> Result<String, Box<dyn Error>> {
-    let mut reader: Reader<&[u8]> = Reader::from_str(&xml);
-    reader.config_mut().trim_text(true);
-
+fn parse_nfe_mod_65(xml: Bytes) -> Result<NfeJson, Box<dyn Error>> {
+    
     let mut nfe_json: NfeJson = NfeJson::default();
-    nfe_json.company_id = company_id;
-    nfe_json.org_id = org_id;
 
+    let mut reader: Reader<&[u8]> = Reader::from_reader(&xml);
     reader.config_mut().trim_text(true);
 
     loop {
@@ -107,9 +105,7 @@ fn parse_nfe_mod_65(xml: String, company_id: i128, org_id: i128) -> Result<Strin
     if nfe_json.nfes.is_empty() {
         return Err(ParseError::Outros("Nenhuma NFe encontrada no XML".to_string()).into());
     }
-
-    let json = serde_json::to_string(&nfe_json)?;
-    return Ok(json);
+    return Ok(nfe_json);
 }
 
 fn parse_nfeProc_65(reader: &mut XmlReader) -> Result<NFe, Box<dyn Error>> {
@@ -159,7 +155,7 @@ fn parse_enviNfe_65(reader: &mut XmlReader) -> Vec<NFe> {
     return Vec::new();
 }
 
-fn parse_nfe_mod_57(_xml: String) -> Result<String, Box<dyn std::error::Error>> {
+fn parse_nfe_mod_57(_xml: Bytes) -> Result<NfeJson, Box<dyn std::error::Error>> {
     Err(Box::<dyn std::error::Error>::from("Not implemented"))
 }
 
@@ -2699,8 +2695,8 @@ fn parse_gPagAntecipado(reader: &mut XmlReader) -> Result<Vec<String>, Box<dyn E
     }
 }
 
-fn get_mod_nfe(xml_bytes: &String) -> Result<ModNfe, Box<dyn Error>> {
-    let mut reader: Reader<&[u8]> = Reader::from_str(xml_bytes);
+fn get_mod_nfe(xml: &Bytes) -> Result<ModNfe, Box<dyn Error>> {
+    let mut reader: Reader<&[u8]> = Reader::from_reader(xml);
     reader.config_mut().trim_text(true);
 
     let mut inside_mod: bool = false;

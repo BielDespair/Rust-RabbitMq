@@ -1,9 +1,11 @@
 use amqprs::{
-    BasicProperties, Deliver, callbacks,
+     callbacks,
     channel::{self, Channel},
     connection::{self, Connection},
 };
-use std::{env, sync::Arc};
+use serde::{Deserialize, Serialize};
+use core::panic;
+use std::{env, error::Error, sync::Arc};
 use tokio::time::sleep;
 
 
@@ -11,19 +13,21 @@ use tokio::time::sleep;
 pub struct RabbitVariables {
     pub host: String,
     pub port: u16,
-    pub username: String,
-    pub password: String,
-    pub queue_name: String,
-    pub num_channels: u8,
+    pub user: String,
+    pub pwd: String,
+    pub consume_queue: String,
+    pub publish_queue: String,
+
     pub routing_key: String,
-    pub exchange_name: String,
-    pub consumer: String,
+    pub exchange: String,
+    pub num_channels: u8,
 }
 
-#[derive(serde::Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Message {
-    pub id: String,
-    pub body: String,
+    pub org_id: i64,
+    pub company_id: i64,
+    pub file: String,
 }
 
 #[inline]
@@ -31,22 +35,40 @@ fn env_not_present(var_name: &str) -> String {
     return format!("Enviroment variable '{}' not set", var_name);
 }
 
-pub fn initialize_variables(prefix: &str) -> RabbitVariables {
-    let get = |key: &str| {
-        let full = format!("{}_{}", prefix, key);
-        env::var(&full).expect(&env_not_present(&full))
+#[inline]
+fn get_var(var: &str) -> String {
+    env::var(var).expect(&env_not_present(&var))
+}
+
+pub fn initialize_variables() -> RabbitVariables {
+    let n_channels: u8 = match get_var("NUM_CHANNELS").parse() {
+        Ok(n) => {
+            if n > 20 {
+                panic!("Number of channels cannot exceed 20!")
+            } else {n}
+        }
+
+        Err(e) => panic!("Invalid number of channels: {}", e)
+    };
+
+    let port: u16 = match get_var("RABBIT_PORT").parse() {
+        Ok(p) => p,
+        Err(e) => panic!("Invalid port: {}", e)
     };
 
     RabbitVariables {
-        host: get("HOST"),
-        port: get("PORT").parse().unwrap(),
-        username: get("USER"),
-        password: get("PASS"),
-        queue_name: get("QUEUE"),
-        num_channels: get("NUM_CHANNELS").parse().unwrap(),
-        routing_key: get("ROUTING_KEY"),
-        exchange_name: get("EXCHANGE"),
-        consumer: get("CONSUMER"),
+        host: get_var("RABBIT_HOST"),
+        port: port,
+        user: get_var("RABBIT_USER"),
+        pwd: get_var("RABBIT_PWD"),
+        
+        consume_queue: get_var("CONSUME_QUEUE"),        
+        publish_queue: get_var("PUBLISH_QUEUE"),
+
+        exchange: get_var("EXCHANGE"),
+        routing_key: get_var("ROUTING_KEY"),
+
+        num_channels: n_channels,
     }
 }
 
@@ -57,8 +79,8 @@ pub async fn connect_rabbitmq(rabbit_variables: &RabbitVariables) -> Arc<connect
             connection::Connection::open(&connection::OpenConnectionArguments::new(
                 &rabbit_variables.host,
                 rabbit_variables.port,
-                &rabbit_variables.username,
-                &rabbit_variables.password,
+                &rabbit_variables.user,
+                &rabbit_variables.pwd
             ))
             .await;
         match result_connection {
@@ -89,86 +111,38 @@ pub async fn connect_rabbitmq(rabbit_variables: &RabbitVariables) -> Arc<connect
     return Arc::new(connection);
 }
 
-pub async fn initialize_channels(
-    rabbit_variables: &RabbitVariables,
-    connection: &Connection,
-    channels: &mut Vec<Channel>,
-) -> () {
-    channels.clear();
-    for _ in 0..rabbit_variables.num_channels {
-        let channel = match connection.open_channel(None).await {
-            Ok(r) => r,
-            Err(e) => {
-                log::error!("Could not open channel to RabbitMQ: {e}");
-                return;
-            }
+pub async fn initialize_channels(queue: &String, routing_key: &String, exchange: &String, num_channels: u8, connection: &Connection) -> Result<Vec<Channel>, Box<dyn Error>>{
+    let mut channels: Vec<Channel> = Vec::new();
+    for _ in 0..num_channels {
+        let channel: Channel = match initialize_channel(&queue, &routing_key, &exchange, &connection).await {
+            Ok(v) => v,
+            Err(e) => return Err(e),
         };
-
-        match channel
-            .register_callback(callbacks::DefaultChannelCallback)
-            .await
-        {
-            Ok(_) => (),
-            Err(e) => log::error!("Could not register channel callback: {e}"),
-        }
-
-        match channel
-            .queue_declare(channel::QueueDeclareArguments::durable_client_named(
-                &rabbit_variables.queue_name,
-            ))
-            .await
-        {
-            Ok(_) => (),
-            Err(e) => {
-                log::error!("Could not declare queue: {e}");
-                return;
-            }
-        }
-
-        if !rabbit_variables.exchange_name.is_empty() {
-            match channel
-                .queue_bind(channel::QueueBindArguments::new(
-                    &rabbit_variables.queue_name,
-                    &rabbit_variables.exchange_name,
-                    &rabbit_variables.routing_key,
-                ))
-                .await
-            {
-                Ok(_) => (),
-                Err(e) => {
-                    log::error!("Could not bind queue: {e}");
-                    return;
-                }
-            }
-        }
         channels.push(channel);
     }
+
+    log::info!("Sucessfully initialized channels on queue {}", queue);
+    Ok(channels)
 }
 
 
-pub async fn publish(
-    content: String,
-    channel: Channel,
-    exchange_name: &String,
+pub async fn initialize_channel(
+    queue: &String,
     routing_key: &String,
-) -> bool {
-    let args = channel::BasicPublishArguments::new(exchange_name, routing_key);
+    exchange: &String,
+    connection: &Connection,
+) -> Result<Channel, Box<dyn Error>> {
 
-    let result = channel
-        .basic_publish(
-            BasicProperties::default(),
-            content.as_bytes().to_vec(),
-            args,
-        )
-        .await;
+    let channel: Channel = connection.open_channel(None).await?;
+    channel.register_callback(callbacks::DefaultChannelCallback).await?;
+    channel.queue_declare(channel::QueueDeclareArguments::durable_client_named(&queue)).await?;
+    
 
-    match result {
-        Ok(_) => {
-            return true;
-        }
-        Err(e) => {
-            log::error!("Could not publish message: {e}");
-            return false;
-        }
+    // Se um nome de exchange for fornecido, faz o bind da fila. Se não, usa a DefaultExchange
+    if !exchange.is_empty() {
+        channel
+            .queue_bind(channel::QueueBindArguments::new(queue, exchange,routing_key, )).await?;
     }
+
+    Ok(channel)
 }
