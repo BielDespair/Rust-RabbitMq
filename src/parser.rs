@@ -9,6 +9,7 @@ mod nfe_parser;
 mod minio_client;
 mod impostos;
 mod det;
+mod nfe;
 
 #[tokio::main]
 async fn main() {

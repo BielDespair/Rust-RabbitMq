@@ -255,7 +255,7 @@
 							<xs:documentation>Quantidade com abse no campo uTrib informado</xs:documentation>
 						</xs:annotation>
 					</xs:element>
-				</xs:sequence>
+				</xs:sequence>TIBSCBSMonoTot
 				<xs:element name="vIS" type="TDec1302">
 					<xs:annotation>
 						<xs:documentation>Valor do Imposto Seletivo calculado</xs:documentation>

@@ -1,6 +1,4 @@
 #![allow(non_snake_case)]
-use std::default;
-
 use rust_decimal::Decimal;
 use serde::Serialize;
 

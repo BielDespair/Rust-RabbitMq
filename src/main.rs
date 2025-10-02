@@ -3,8 +3,10 @@ mod rabbitmq;
 mod minio_client;
 
 mod nfes;
+mod nfe;
 mod impostos;
 mod det;
+
 
 
 use amqprs::connection::Connection;

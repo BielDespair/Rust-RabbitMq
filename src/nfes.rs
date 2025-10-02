@@ -2,7 +2,7 @@
 use rust_decimal::Decimal;
 use serde::{Serialize};
 
-use crate::{det::impostoDevol::ImpostoDevol, impostos::{cofins::COFINS, cofins_st::COFINSST, ibs_cbs::IBSCBS, icms::Icms, icms_uf_dest::ICMSUFDest, ii::Ii, ipi::Ipi, is::IS, issqn::ISSQN, pis::PIS, pis_st::PISST}};
+use crate::{det::impostoDevol::ImpostoDevol, impostos::{cofins::COFINS, cofins_st::COFINSST, ibs_cbs::IBSCBS, icms::Icms, icms_uf_dest::ICMSUFDest, ii::Ii, ipi::Ipi, is::IS, issqn::ISSQN, pis::PIS, pis_st::PISST}, nfe::{cobr::Cobr, compra::Compra, exporta::Exporta, infAdic::InfAdic, inf_intermed::InfIntermed, pag::Pag, total::Total, transp::Transp}};
 
 
 
@@ -17,12 +17,20 @@ pub struct NFe {
     pub Id: String,
     pub ide: Ide,
     pub emit: Emit,
-    pub produtos: Vec<Det>,
     pub avulsa: Option<Avulsa>,
     pub dest: Option<Dest>,
     pub retirada: Option<Local>,
     pub entrega: Option<Local>, 
     pub autXML: Option<Vec<EmitenteId>>,
+    pub produtos: Vec<Det>,
+    pub total: Total,
+    pub transp: Transp,
+    pub cobr: Option<Cobr>, 
+    pub pag: Pag,
+    pub infIntermed: Option<InfIntermed>,
+    pub infAdic: Option<InfAdic>,
+    pub exporta: Option<Exporta>,
+    pub compra: Option<Compra>,
 }
 
 #[derive(Debug, Default, Serialize)]
