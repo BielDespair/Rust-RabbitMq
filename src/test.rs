@@ -2,15 +2,9 @@ use std::fs;
 
 use bytes::Bytes;
 use dotenv::dotenv;
-use quick_xml::{events::Event, Reader};
-
-use crate::nfe_parser::parse_nfe;
 
 mod logger;
 mod nfes;
-mod det;
-mod nfe;
-mod impostos;
 mod nfe_parser;
 
 mod minio_client;
@@ -28,7 +22,7 @@ async fn main() {
 
     let json = nfe_parser::parse_nfe(file,0,0,);
 
-    let json: String = match json {
+    let json: Vec<u8> = match json {
         Ok(j) => j,
         Err(e) => {
             log::error!("Erro: {}", e);

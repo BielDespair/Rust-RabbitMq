@@ -6,8 +6,6 @@ mod nfe_parser;
 mod nfes;
 mod nfe;
 
-use std::process;
-
 use dotenv::dotenv;
 
 use crate::{minio_client::MinioVariables, rabbitmq::{common::{initialize_variables, RabbitVariables}, consumer::RabbitMqConsumer}};

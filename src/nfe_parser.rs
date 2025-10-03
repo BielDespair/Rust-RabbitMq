@@ -9,6 +9,7 @@ use quick_xml::{
 };
 use rust_decimal::Decimal;
 
+
 use crate::{
     nfe::det::impostoDevol::{ImpostoDevol, IpiDevol}, nfe::impostos::{
         cibs::{

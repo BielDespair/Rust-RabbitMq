@@ -1,8 +1,8 @@
-use std::{error::Error, fs, sync::{Arc}, time::Duration};
+use std::{error::Error, fs, result, sync::Arc, time::Duration};
 
 use amqprs::{
     channel::{
-        BasicAckArguments, BasicConsumeArguments, BasicPublishArguments, Channel
+        BasicAckArguments, BasicConsumeArguments, BasicPublishArguments, BasicRejectArguments, Channel
     }, connection::Connection, consumer::AsyncConsumer, BasicProperties, Deliver
 };
 use async_trait::async_trait;
@@ -29,7 +29,7 @@ impl XmlConsumer {
             immediate: false
         };
 
-        let channel: Channel = rabbitmq::common::initialize_channel(&variables.publish_queue, &variables.routing_key, &variables.exchange, &connection).await?;
+        let channel: Channel = rabbitmq::common::initialize_publish_channel(&variables.publish_queue, &variables.routing_key, &variables.exchange, &connection).await?;
 
         Ok(Self {
             publish_args: args,
@@ -126,10 +126,8 @@ impl XmlConsumer {
             BasicProperties::default(), message, self.publish_args.clone()).await;
 
         match result {
-            Ok(_) => {
-                log::info!("Successfully published message");
-                return true;
-            }
+            Ok(_) =>  return true,
+            
             Err(e) => {
                 log::error!("Failed to publish message: {}", e);
                 return false;
@@ -137,7 +135,18 @@ impl XmlConsumer {
         }
     }
 
+    async fn reject_message(&self, channel: &Channel, deliver: Deliver) {
+        let args: BasicRejectArguments = BasicRejectArguments::new(deliver.delivery_tag(), false);
+
+        let result = channel.basic_reject(args).await;
+
+        match result {
+            Ok(_) => (),
+            Err(e) => log::error!("Failed to reject message: {}", e)
+        }
+    }
 }
+
 impl Drop for XmlConsumer {
     fn drop(&mut self) {
         println!("XmlConsumer is being dropped!");
@@ -147,15 +156,15 @@ impl Drop for XmlConsumer {
 impl AsyncConsumer for XmlConsumer {
     async fn consume(&mut self, channel: &Channel, deliver: Deliver, _basic_properties: BasicProperties, content: Vec<u8>) {
         
-
         //let current_thread: ThreadId = thread::current().id();
-        log::info!("Consuming on channel: {}", channel.channel_id());
+        log::debug!("Consuming on channel: {}", channel.channel_id());
+        
 
         let content_json = match std::str::from_utf8(&content) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("{}", e);
-                return;
+                return self.reject_message(&channel, deliver).await;
             }
         };
 
@@ -164,43 +173,40 @@ impl AsyncConsumer for XmlConsumer {
             Err(e) => {
                 let content_str = String::from_utf8_lossy(&content);
                 log::error!("Failed to decode message: {} | Content: {}", e, content_str);
-                return;
+                return self.reject_message(&channel, deliver).await;
             }
         };
 
-        /*
-        let file: Bytes = match minio_client::download_object(&message.file, &self.bucket_name).await {
+        let result =  minio_client::download_object(&message.file, &self.bucket_name).await
+            .map_err(|e| {log::error!("Failed to download MinIO object: {}", e);});
+        let file: Bytes = match result {
             Ok(f) => f,
-            Err(e) => {
-                log::error!("Failed to download MinIO object: {}", e);
-                return;
-            }
+            Err(_) => return self.reject_message(channel, deliver).await
         };
-         */
-        let file: Vec<u8> = fs::read("./data/Mod55.xml").expect("msg");
-        let file: Bytes = Bytes::from(file);
-        
-        
-        let json_bytes: Vec<u8> = match parse_nfe(file, message.company_id, message.org_id) {
+      
+        let result = parse_nfe(file, message.company_id, message.org_id)
+            .map_err(|e| {log::error!("Failed: {}", e);});
+
+        let json_bytes = match result {
             Ok(v) => v,
-            Err(e) => {
-                log::error!("Failed to serialize value to JSON bytes: {}", e);
-                return;
-            }
+            Err(_) => return self.reject_message(&channel, deliver).await
         };
 
-        self.publish(json_bytes).await;
+        let result: bool = self.publish(json_bytes).await;
+        if !result {
+            return self.reject_message(&channel, deliver).await;
+        }
         
-
 
         let args: BasicAckArguments = BasicAckArguments::new(deliver.delivery_tag(), false);
 
         match channel.basic_ack(args).await {
             Ok(_) => {
-                log::info!("Sucessfully parsed and sended file {}", message.file);
+                log::info!("Message processed successfully | file: {} | company_id: {} | org_id: {}", 
+                message.file, message.company_id, message.org_id);
             }
             Err(e) => {
-                log::error!("Could not send: {e}");
+                log::error!("Could not ack message: {e}");
                 return;
             }
         };

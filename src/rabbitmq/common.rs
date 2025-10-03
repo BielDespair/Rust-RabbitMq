@@ -1,7 +1,7 @@
 use amqprs::{
      callbacks,
-    channel::{self, Channel},
-    connection::{self, Connection},
+    channel::{Channel, QueueBindArguments, QueueDeclareArguments},
+    connection::{self, Connection}, FieldTable,
 };
 use serde::{Deserialize, Serialize};
 use core::panic;
@@ -29,6 +29,7 @@ pub struct Message {
     pub company_id: i64,
     pub file: String,
 }
+
 
 #[inline]
 fn env_not_present(var_name: &str) -> String {
@@ -114,7 +115,7 @@ pub async fn connect_rabbitmq(rabbit_variables: &RabbitVariables) -> Arc<connect
 pub async fn initialize_channels(queue: &String, routing_key: &String, exchange: &String, num_channels: u8, connection: &Connection) -> Result<Vec<Channel>, Box<dyn Error>>{
     let mut channels: Vec<Channel> = Vec::new();
     for _ in 0..num_channels {
-        let channel: Channel = match initialize_channel(&queue, &routing_key, &exchange, &connection).await {
+        let channel: Channel = match initialize_consumer_channel(&queue, &routing_key, &exchange, &connection).await {
             Ok(v) => v,
             Err(e) => return Err(e),
         };
@@ -125,8 +126,35 @@ pub async fn initialize_channels(queue: &String, routing_key: &String, exchange:
     Ok(channels)
 }
 
+pub async fn initialize_consumer_channel(
+    queue: &String,
+    routing_key: &String,
+    exchange: &String,
+    connection: &Connection,
+) -> Result<Channel, Box<dyn Error>> {
+    let channel: Channel = connection.open_channel(None).await?;
+    channel.register_callback(callbacks::DefaultChannelCallback).await?;
 
-pub async fn initialize_channel(
+    declare_dlx_exchange(&channel).await?;
+
+
+    let mut table: FieldTable = FieldTable::new();
+    table.insert("x-dead-letter-exchange".try_into()?,"dead_letter_exchange".try_into()?);
+    table.insert("x-dead-letter-routing-key".try_into()?, "dead_letter_queue".try_into()?);
+
+    let declare_args: QueueDeclareArguments = QueueDeclareArguments::durable_client_named(queue).arguments(table).finish();
+
+    
+    channel.queue_declare(declare_args).await?;
+
+    if !exchange.is_empty() {
+        channel.queue_bind(QueueBindArguments::new(queue, exchange, routing_key)).await?;
+    }
+    
+    Ok(channel)
+}
+
+pub async fn initialize_publish_channel(
     queue: &String,
     routing_key: &String,
     exchange: &String,
@@ -135,14 +163,22 @@ pub async fn initialize_channel(
 
     let channel: Channel = connection.open_channel(None).await?;
     channel.register_callback(callbacks::DefaultChannelCallback).await?;
-    channel.queue_declare(channel::QueueDeclareArguments::durable_client_named(&queue)).await?;
     
+    channel.queue_declare(QueueDeclareArguments::durable_client_named(queue)).await?;
 
-    // Se um nome de exchange for fornecido, faz o bind da fila. Se não, usa a DefaultExchange
     if !exchange.is_empty() {
-        channel
-            .queue_bind(channel::QueueBindArguments::new(queue, exchange,routing_key, )).await?;
+        channel.queue_bind(QueueBindArguments::new(queue, exchange, routing_key)).await?;
     }
-
+    
     Ok(channel)
+}
+
+async fn declare_dlx_exchange(channel: &Channel) -> Result<(), Box<dyn Error>> {
+    let dlq_args: QueueDeclareArguments = QueueDeclareArguments::durable_client_named("dead_letter_queue").finish();
+
+    channel.exchange_declare(amqprs::channel::ExchangeDeclareArguments::new("dead_letter_exchange", "direct")).await?;
+    channel.queue_declare(dlq_args).await?;
+    channel.queue_bind(QueueBindArguments::new("dead_letter_queue", "dead_letter_exchange", "dead_letter_queue")).await?;
+
+    Ok(())
 }
