@@ -4,7 +4,7 @@ use std::error::Error;
 
 use quick_xml::events::Event;
 use serde::Serialize;
-use crate::{nfe::common::{read_text_string, ParseError, XmlReader}, nfes::UF};
+use crate::{nfe::common::{read_text, ParseError, XmlReader}, nfes::UF};
 
 #[derive(Debug, Default, Serialize)]
 pub struct Exporta {
@@ -21,7 +21,7 @@ pub fn parse_exporta(reader: &mut XmlReader) -> Result<Exporta, Box<dyn Error>> 
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"UFSaidaPais" => exporta.UFSaidaPais = UF::from(txt.as_str()),
                     b"xLocExporta" => exporta.xLocExporta = txt,

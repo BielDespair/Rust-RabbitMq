@@ -6,7 +6,7 @@ use quick_xml::events::Event;
 use rust_decimal::Decimal;
 use serde::Serialize;
 
-use crate::{nfe::common::{read_text_string, ParseError, XmlReader}, nfes::UF};
+use crate::{nfe::common::{read_text, ParseError, XmlReader}, nfes::UF};
 
 
 
@@ -48,7 +48,7 @@ pub fn parse_pag(reader: &mut XmlReader) -> Result<Pag, Box<dyn Error>> {
                     pag.detPag.get_or_insert_with(Vec::new).push(parse_detPag(reader)?);
                 }
                 b"vTroco" => {
-                    let txt: String = read_text_string(reader, &e)?;
+                    let txt: String = read_text(reader, &e)?;
                     if !txt.is_empty() {
                         pag.vTroco = Some(txt.parse::<Decimal>()?);
                     }
@@ -71,7 +71,7 @@ fn parse_detPag(reader: &mut XmlReader) -> Result<DetPag, Box<dyn Error>> {
             Event::Start(e) => match e.name().as_ref() {
                 b"card" => det_pag.card = Some(parse_card(reader)?),
                 name => {
-                    let txt = read_text_string(reader, &e)?;
+                    let txt = read_text(reader, &e)?;
                     match name {
                         b"indPag" => det_pag.indPag = Some(txt),
                         b"tPag" => det_pag.tPag = txt,
@@ -96,7 +96,7 @@ fn parse_card(reader: &mut XmlReader) -> Result<Card, Box<dyn Error>> {
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"tpIntegra" => card.tpIntegra = txt,
                     b"CNPJ" => card.CNPJ = Some(txt),

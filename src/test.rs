@@ -1,12 +1,13 @@
-use std::fs;
+use std::{fs, time::Instant};
 
 use bytes::Bytes;
 use dotenv::dotenv;
 
 mod logger;
+mod nfe;
 mod nfes;
-mod nfe_parser;
 
+mod nfe_parser;
 mod minio_client;
 
 
@@ -18,9 +19,14 @@ async fn main() {
     let variables: minio_client::MinioVariables = minio_client::initialize_variables();
     minio_client::init_client(&variables);
 
-    let file: Bytes = minio_client::download_object("NFCe33250627708310000111650010006827679001864260.xml", &variables.bucket_name).await.expect("Failed");
+    //let file: Bytes = minio_client::download_object("NFCe33250627708310000111650010006827679001864260.xml", &variables.bucket_name).await.expect("Failed");
 
-    let json = nfe_parser::parse_nfe(file,0,0,);
+    let file: Bytes = Bytes::from(fs::read("./data/evento.xml").unwrap());
+
+    let start = Instant::now();
+    let json = nfe_parser::parse_xml(file, 6, 9);
+    let elapsed = start.elapsed();
+    log::info!("Tempo total parse: {:?}", elapsed);
 
     let json: Vec<u8> = match json {
         Ok(j) => j,

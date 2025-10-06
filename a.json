@@ -1,24 +1,9 @@
 [{
     "company_id": 10,
     "org_id": 2,
-    "nfe": {
-        "ide": {
-
-        },
-        "emit": {
-
-        },
-        "produtos": [
-            {
-                "prod": {
-
-                },
-                "imposto": {
-
-                }
-            }
-        ]
-    }
+    "eventos": [
+        {},{}
+    ]
 },
 
 {

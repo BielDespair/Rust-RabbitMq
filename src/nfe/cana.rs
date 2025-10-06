@@ -5,7 +5,7 @@ use quick_xml::{events::{BytesStart, Event}, Reader};
 use rust_decimal::Decimal;
 use serde::Serialize;
 
-use crate::nfe::common::{read_text_string, ParseError};
+use crate::nfe::common::{read_text, ParseError};
 
 #[derive(Debug, Default, Serialize)]
 pub struct Cana {
@@ -43,7 +43,7 @@ pub fn parse_cana(reader: &mut Reader<&[u8]>) -> Result<Cana, Box<dyn Error>> {
                 b"deduc" => cana.deduc.get_or_insert_default().push(parse_deduc(reader)?),
 
                 name => {
-                    let txt: String = read_text_string(reader, &e)?;
+                    let txt: String = read_text(reader, &e)?;
                     match name {
                         b"safra" => cana.safra = txt,
                         b"ref" => cana.r#ref = txt,
@@ -75,7 +75,7 @@ fn parse_forDia(reader: &mut Reader<&[u8]>, e: &BytesStart) -> Result<ForDia, Bo
     loop {
         match reader.read_event()? {
             Event::Start(e) if e.name().as_ref() == b"qtde" => {
-                let txt: String = read_text_string(reader, &e)?;
+                let txt: String = read_text(reader, &e)?;
                 f.qtde = txt.parse::<Decimal>()?;
             }
             Event::End(e) if e.name().as_ref() == b"forDia" => return Ok(f),
@@ -91,7 +91,7 @@ fn parse_deduc(reader: &mut Reader<&[u8]>) -> Result<Deduc, Box<dyn Error>> {
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"xDed" => d.xDed = txt,
                     b"vDed" => d.vDed = txt.parse()?,

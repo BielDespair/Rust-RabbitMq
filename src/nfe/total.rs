@@ -6,7 +6,7 @@ use quick_xml::events::Event;
 use rust_decimal::Decimal;
 use serde::Serialize;
 
-use crate::nfe::common::{ParseError, XmlReader, read_text_string};
+use crate::nfe::common::{ParseError, XmlReader, read_text};
 
 #[derive(Debug, Default, Serialize)]
 pub struct Total {
@@ -144,7 +144,7 @@ pub fn parse_total(reader: &mut XmlReader) -> Result<Total, Box<dyn Error>> {
                 b"retTrib" => total.retTrib = Some(parse_retTrib(reader)?),
                 b"ISTot" => total.ISTot = Some(parse_ISTot(reader)?),
                 b"IBSCBSTot" => total.IBSCBSTot = Some(parse_IBSCBSTot(reader)?),
-                b"vNFTot" => total.vNFTot = Some(read_text_string(reader, &e)?.parse::<Decimal>()?),
+                b"vNFTot" => total.vNFTot = Some(read_text(reader, &e)?.parse::<Decimal>()?),
                 _ => (),
             },
             Event::End(e) if e.name().as_ref() == b"total" => return Ok(total),
@@ -159,7 +159,7 @@ fn parse_ICMSTot(reader: &mut XmlReader) -> Result<ICMSTot, Box<dyn Error>> {
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"vBC" => g.vBC = txt.parse::<Decimal>()?,
                     b"vICMS" => g.vICMS = txt.parse::<Decimal>()?,
@@ -207,7 +207,7 @@ fn parse_ISSQNtot(reader: &mut XmlReader) -> Result<ISSQNtot, Box<dyn Error>> {
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"vServ" => g.vServ = Some(txt.parse::<Decimal>()?),
                     b"vBC" => g.vBC = Some(txt.parse::<Decimal>()?),
@@ -238,7 +238,7 @@ fn parse_retTrib(reader: &mut XmlReader) -> Result<RetTrib, Box<dyn Error>> {
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"vRetPIS" => g.vRetPIS = Some(txt.parse::<Decimal>()?),
                     b"vRetCOFINS" => g.vRetCOFINS = Some(txt.parse::<Decimal>()?),
@@ -264,7 +264,7 @@ fn parse_ISTot(reader: &mut XmlReader) -> Result<ISTot, Box<dyn Error>> {
     loop {
         match reader.read_event()? {
             Event::Start(e) if e.name().as_ref() == b"vIS" => {
-                g.vIS = read_text_string(reader, &e)?.parse::<Decimal>()?;
+                g.vIS = read_text(reader, &e)?.parse::<Decimal>()?;
             }
             Event::End(e) if e.name().as_ref() == b"ISTot" => return Ok(g),
             Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("ISTot".to_string()))),
@@ -283,7 +283,7 @@ fn parse_IBSCBSTot(reader: &mut XmlReader) -> Result<IBSCBSTot, Box<dyn Error>> 
                     b"gIBS" => g.gIBS = Some(parse_GIBSTot(reader)?),
                     b"gCBS" => g.gCBS = Some(parse_GCBSTot(reader)?),
                     b"gMono" => g.gMono = Some(parse_GMonoTot(reader)?),
-                    b"vBCIBSCBS" => g.vBCIBSCBS = read_text_string(reader, &e)?.parse::<Decimal>()?,
+                    b"vBCIBSCBS" => g.vBCIBSCBS = read_text(reader, &e)?.parse::<Decimal>()?,
                     _ => (),
                 }
             }
@@ -304,7 +304,7 @@ fn parse_GIBSTot(reader: &mut XmlReader) -> Result<GIBSTot, Box<dyn Error>> {
                 b"gIBSUF" => g.gIBSUF = parse_GIBSTotUF(reader)?,
                 b"gIBSMun" => g.gIBSMun = parse_GIBSTotMun(reader)?,
                 name => {
-                    let txt: String = read_text_string(reader, &e)?;
+                    let txt: String = read_text(reader, &e)?;
                     match name {
                         b"vIBS" => g.vIBS = txt.parse::<Decimal>()?,
                         b"vCredPres" => g.vCredPres = txt.parse::<Decimal>()?,
@@ -325,7 +325,7 @@ fn parse_GCBSTot(reader: &mut XmlReader) -> Result<GCBSTot, Box<dyn Error>> {
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"vDif" => g.vDif = txt.parse()?,
                     b"vDevTrib" => g.vDevTrib = txt.parse()?,
@@ -347,7 +347,7 @@ fn parse_GMonoTot(reader: &mut XmlReader) -> Result<GMonoTot, Box<dyn Error>> {
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"vIBSMono" => g.vIBSMono = txt.parse()?,
                     b"vCBSMono" => g.vCBSMono = txt.parse()?,
@@ -370,7 +370,7 @@ fn parse_GIBSTotUF(reader: &mut XmlReader) -> Result<GIBSTotUF, Box<dyn Error>> 
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"vDif" => g.vDif = txt.parse::<Decimal>()?,
                     b"vDevTrib" => g.vDevTrib = txt.parse::<Decimal>()?,
@@ -390,7 +390,7 @@ fn parse_GIBSTotMun(reader: &mut XmlReader) -> Result<GIBSTotMun, Box<dyn Error>
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"vDif" => g.vDif = txt.parse::<Decimal>()?,
                     b"vDevTrib" => g.vDevTrib = txt.parse::<Decimal>()?,

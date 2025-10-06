@@ -5,7 +5,7 @@ use std::error::Error;
 use quick_xml::events::{BytesStart, Event};
 use serde::Serialize;
 
-use crate::nfe::common::{read_text_string, ParseError, XmlReader};
+use crate::nfe::common::{read_text, ParseError, XmlReader};
 
 #[derive(Debug, Default, Serialize)]
 pub struct InfAdic {
@@ -50,7 +50,7 @@ pub fn parse_infAdic(reader: &mut XmlReader) -> Result<InfAdic, Box<dyn Error>> 
                     inf_adic.procRef.get_or_insert_with(Vec::new).push(parse_procRef(reader)?);
                 }
                 name => {
-                    let txt = read_text_string(reader, &e)?;
+                    let txt = read_text(reader, &e)?;
                     match name {
                         b"infAdFisco" => inf_adic.infAdFisco = Some(txt),
                         b"infCpl" => inf_adic.infCpl = Some(txt),
@@ -76,7 +76,7 @@ fn parse_obsCont(reader: &mut XmlReader, e: &BytesStart) -> Result<ObsCont, Box<
     loop {
         match reader.read_event()? {
             Event::Start(e) if e.name().as_ref() == b"xTexto" => {
-                obs.xTexto = read_text_string(reader, &e)?;
+                obs.xTexto = read_text(reader, &e)?;
             }
             // Encerra ao encontrar a tag de fechamento </obsCont>
             Event::End(e) if e.name().as_ref() == b"obsCont" => return Ok(obs),
@@ -96,7 +96,7 @@ fn parse_obsFisco(reader: &mut XmlReader, e: &BytesStart) -> Result<ObsFisco, Bo
     loop {
         match reader.read_event()? {
             Event::Start(e) if e.name().as_ref() == b"xTexto" => {
-                obs.xTexto = read_text_string(reader, &e)?;
+                obs.xTexto = read_text(reader, &e)?;
             }
             Event::End(e) if e.name().as_ref() == b"obsFisco" => return Ok(obs),
 
@@ -111,7 +111,7 @@ fn parse_procRef(reader: &mut XmlReader) -> Result<ProcRef, Box<dyn Error>> {
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"nProc" => proc_ref.nProc = txt,
                     b"indProc" => proc_ref.indProc = txt,

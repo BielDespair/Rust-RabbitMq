@@ -1,5 +1,6 @@
 pub mod det;
 pub mod impostos;
+pub mod eventos;
 
 pub mod common;
 pub mod total;

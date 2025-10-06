@@ -8,7 +8,7 @@ use quick_xml::{
 use rust_decimal::Decimal;
 use serde::Serialize;
 
-use crate::nfe::common::{ParseError, read_text_string};
+use crate::nfe::common::{ParseError, read_text};
 
 #[derive(Debug, Default, Serialize)]
 pub struct Agropecuario {
@@ -74,7 +74,7 @@ fn parse_defensivo(reader: &mut Reader<&[u8]>) -> Result<Defensivo, Box<dyn Erro
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt: String = read_text_string(reader, &e)?;
+                let txt: String = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"nReceituario" => def.nReceituario = txt,
                     b"CPFRespTec" => def.CPFRespTec = txt,
@@ -95,7 +95,7 @@ fn parse_guiaTransito(reader: &mut Reader<&[u8]>) -> Result<GuiaTransito, Box<dy
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt: String = read_text_string(reader, &e)?;
+                let txt: String = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"tpGuia" => guia.tpGuia = txt,
                     b"UFGuia" => guia.UFGuia = txt,

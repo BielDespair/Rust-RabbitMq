@@ -27,7 +27,7 @@ async fn main() {
     let connection: Arc<Connection> = rabbitmq::common::connect_rabbitmq(&variables).await;
 
     // Inicializa um único channel
-    let mut channel: Channel = rabbitmq::common::initialize_channel(
+    let mut channel: Channel = rabbitmq::common::initialize_publish_channel(
         &"xml_queue".to_string(),
         &"xml_queue".to_string(),
         &String::new(),

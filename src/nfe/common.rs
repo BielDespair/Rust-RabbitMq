@@ -13,7 +13,6 @@ pub enum ParseError {
     CampoDesconhecido(String),
     UnexpectedEof(String),
     Xml(String),
-    Outros(String),
 }
 
 impl Error for ParseError {}
@@ -27,7 +26,6 @@ impl std::fmt::Display for ParseError {
             }
             ParseError::IdNaoEncontrado => write!(f, "Id da NFe não encontrado"),
             ParseError::Xml(e) => write!(f, "XML malformado: {}", e),
-            ParseError::Outros(msg) => write!(f, "Erro: {}", msg),
             ParseError::UnexpectedEof(item) => {
                 write!(f, "Unexpected Eof while parsing {}", item)
             }
@@ -36,9 +34,21 @@ impl std::fmt::Display for ParseError {
 }
 
 #[inline]
-pub fn read_text_string(reader: &mut XmlReader, e: &BytesStart) -> Result<String, Box<dyn Error>> {
+pub fn read_text(reader: &mut XmlReader, e: &BytesStart) -> Result<String, Box<dyn Error>> {
     let txt = reader.read_text(e.name())?;
     Ok(txt.into_owned())
 }
 
-
+#[inline]
+pub fn get_tag_attribute(e: &BytesStart, key: &[u8]) -> Result<String, ParseError> {
+    for attr in e.attributes() {
+        let attr = attr.map_err(|e| ParseError::Xml(e.to_string()))?;
+        if attr.key.as_ref() == key {
+            let value = attr
+                .unescape_value()
+                .map_err(|e| ParseError::Xml(e.to_string()))?;
+            return Ok(value.into_owned());
+        }
+    }
+    Err(ParseError::IdNaoEncontrado)
+}

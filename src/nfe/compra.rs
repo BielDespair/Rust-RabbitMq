@@ -5,7 +5,7 @@ use std::error::Error;
 use quick_xml::events::Event;
 use serde::Serialize;
 
-use crate::nfe::common::{read_text_string, ParseError, XmlReader};
+use crate::nfe::common::{read_text, ParseError, XmlReader};
 
 /// Informações de compras (Nota de Empenho, Pedido e Contrato)
 #[derive(Debug, Default, Serialize)]
@@ -24,7 +24,7 @@ pub fn parse_compra(reader: &mut XmlReader) -> Result<Compra, Box<dyn Error>> {
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"xNEmp" => compra.xNEmp = Some(txt),
                     b"xPed" => compra.xPed = Some(txt),

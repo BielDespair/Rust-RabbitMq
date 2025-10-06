@@ -4,7 +4,7 @@ use std::error::Error;
 use quick_xml::{events::Event, Reader};
 use serde::{Deserialize, Serialize};
 
-use crate::nfe::common::{read_text_string, ParseError};
+use crate::nfe::common::{read_text, ParseError};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TInfRespTec {
@@ -27,7 +27,7 @@ pub fn parse_infRespTec(reader: &mut Reader<&[u8]>) -> Result<TInfRespTec, Box<d
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt = read_text_string(reader, &e)?;
+                let txt = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     
                     b"CNPJ" => resp.CNPJ = txt,

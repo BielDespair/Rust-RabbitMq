@@ -7,9 +7,10 @@ use amqprs::{
 };
 use async_trait::async_trait;
 use bytes::Bytes;
+use time::format_description::parse;
 use tokio::{time::sleep};
 
-use crate::{minio_client, nfe_parser::parse_nfe, rabbitmq::{self, common::{Message, RabbitVariables}}};
+use crate::{minio_client, nfe_parser::parse_xml, rabbitmq::{self, common::{Message, RabbitVariables}}};
 
 
 // Implementa async consumer
@@ -184,7 +185,7 @@ impl AsyncConsumer for XmlConsumer {
             Err(_) => return self.reject_message(channel, deliver).await
         };
       
-        let result = parse_nfe(file, message.company_id, message.org_id)
+        let result: Result<Vec<u8>, ()> = parse_xml(file, message.company_id, message.org_id)
             .map_err(|e| {log::error!("Failed: {}", e);});
 
         let json_bytes = match result {

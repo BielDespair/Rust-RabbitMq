@@ -4,7 +4,7 @@ use std::error::Error;
 use quick_xml::events::Event;
 use serde::Serialize;
 
-use crate::nfe::common::{read_text_string, ParseError, XmlReader};
+use crate::nfe::common::{read_text, ParseError, XmlReader};
 
 
 
@@ -19,7 +19,7 @@ pub fn parse_infIntermed(reader: &mut XmlReader) -> Result<InfIntermed, Box<dyn 
     loop {
         match reader.read_event()? {
             Event::Start(e) => {
-                let txt: String = read_text_string(reader, &e)?;
+                let txt: String = read_text(reader, &e)?;
                 match e.name().as_ref() {
                     b"CNPJ" => inf_intermed.CNPJ = txt,
                     b"idCadIntTran" => inf_intermed.idCadIntTran = txt,
