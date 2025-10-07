@@ -1,7 +1,7 @@
 # Processador de Documentos Fiscais em Rust
 
-![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
-![RabbitMQ](https://img.shields.io/badge/Rabbitmq-FF6600.svg?style=for-the-badge&logo=rabbitmq&logoColor=white)
+![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white) 
+![RabbitMQ](https://img.shields.io/badge/Rabbitmq-FF6600.svg?style=for-the-badge&logo=rabbitmq&logoColor=white) ![MinIO](https://img.shields.io/badge/MinIO-132F3D.svg?style=for-the-badge&logo=minio&logoColor=white) ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
 
 Este microserviço foi projetado para ter elevada performance, atuando como um parser dos XML das notas fiscais de clientes (NF-e, NFC-e, CT-e, Eventos), consumindo de uma fila do `RabbitMQ` e publicando um JSON customizado em outra fila.
 
@@ -94,8 +94,8 @@ As seguintes variáveis de ambiente são necessárias para a execução do servi
 | `RABBITMQ_PASSWORD`| Senha do usuário. | `guest` |
 | `RABBITMQ_VHOST` | Virtual host a ser utilizado. | `/` |
 | `RABBITMQ_EXCHANGE`| Nome do exchange a ser utilizado. | `nfe_exchange` |
-| `RABBITMQ_CONSUME_QUEUE`| Nome da fila de onde as mensagens serão consumidas. | `xml_para_processar` |
-| `RABBITMQ_PUBLISH_QUEUE`| Nome da fila onde os resultados JSON serão publicados. | `json_processado` |
+| `RABBITMQ_CONSUME_QUEUE`| Nome da fila de onde as mensagens serão consumidas. | `xml_queue` |
+| `RABBITMQ_PUBLISH_QUEUE`| Nome da fila onde os resultados JSON serão publicados. | `json_queue` |
 | `RABBITMQ_ROUTING_KEY`| Chave de roteamento para publicação e binding das filas. | `nfe.json` |
 | `RABBITMQ_NUM_CHANNELS`| Número de canais de consumo a serem abertos. | `10` |
 
