@@ -20,7 +20,7 @@ impl Error for ParseError {}
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParseError::ModeloDesconhecido => write!(f, "Modelo de NFe desconhecido"),
+            ParseError::ModeloDesconhecido => write!(f, "Modelo de NFe desconhecido ou não suportado"),
             ParseError::CampoDesconhecido(campo) => {
                 write!(f, "Campo não mapeado encontrando: {}", campo)
             }

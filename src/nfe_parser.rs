@@ -5,7 +5,7 @@ use std::{error::Error};
 use bytes::Bytes;
 use quick_xml::{
     Reader,
-    events::{BytesStart, Event},
+    events::{Event},
 };
 use rust_decimal::Decimal;
 
@@ -65,18 +65,17 @@ pub fn parse_xml(xml: Bytes, company_id: i64, org_id: i64) -> Result<Vec<u8>, Bo
             return Ok(serde_json::to_vec(&nfe_json)?);
         }
 
-        TipoXml::CTe(modelo) => todo!(),
+        TipoXml::CTe(_) => return Err(ParseError::ModeloDesconhecido.into()),
 
-        TipoXml::LoteNFe => todo!(),
-        TipoXml::LoteCTe => todo!(),
+        TipoXml::LoteNFe => return Err(ParseError::ModeloDesconhecido.into()),
+        TipoXml::LoteCTe => return Err(ParseError::ModeloDesconhecido.into()),
 
-        TipoXml::Evento => {
+        TipoXml::Evento | TipoXml::LoteEvento => {
             let mut evento: EventoJson = parse_evento_nfe(xml)?;
             evento.company_id = company_id;
             evento.org_id = org_id;
             return Ok(serde_json::to_vec(&evento)?);
         }
-        TipoXml::LoteEvento => todo!(),
         TipoXml::Desconhecido => return Err(ParseError::ModeloDesconhecido.into()),
     };
 }
@@ -108,7 +107,7 @@ fn get_tipo_xml(xml: &Bytes) -> Result<TipoXml, Box<dyn Error>> {
                 }
             }
 
-            Event::Eof => return Err(Box::new(ParseError::ModeloDesconhecido)),
+            Event::Eof => return Err(ParseError::ModeloDesconhecido.into()),
             _ => ()
         }
     }
@@ -152,9 +151,9 @@ fn parse_nfe(xml: Bytes, modelo: Modelo) -> Result<NfeJson, Box<dyn Error>> {
             return Ok(nfe_json);
         }
         Modelo::Mod57 => {
-            return Err(Box::new(ParseError::ModeloDesconhecido));
+            return Err(ParseError::ModeloDesconhecido.into());
         }
-        Modelo::Desconhecido => Err(Box::new(ParseError::ModeloDesconhecido))
+        Modelo::Desconhecido => Err(ParseError::ModeloDesconhecido.into())
     }
 }
 

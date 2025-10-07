@@ -1,4 +1,4 @@
-use std::{error::Error, fs, result, sync::Arc, time::Duration};
+use std::{error::Error, sync::Arc, time::Duration};
 
 use amqprs::{
     channel::{
@@ -7,7 +7,6 @@ use amqprs::{
 };
 use async_trait::async_trait;
 use bytes::Bytes;
-use time::format_description::parse;
 use tokio::{time::sleep};
 
 use crate::{minio_client, nfe_parser::parse_xml, rabbitmq::{self, common::{Message, RabbitVariables}}};

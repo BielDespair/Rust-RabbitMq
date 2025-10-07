@@ -20,9 +20,11 @@ pub struct EventoJson {
 
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
-enum Evento {
+pub enum Evento {
     evento(TEvento),
     procEventoNFe(TProcEvento),
+    retEnvEvento(TRetEvento)
+
 }
 
 impl Default for Evento {
@@ -99,12 +101,26 @@ pub fn parse_evento_nfe(xml: Bytes) -> Result<EventoJson, Box<dyn Error>> {
                 b"evento" => {
                     let evento: TEvento = parse_evento(&mut reader)?;
                     evento_json.eventos.push(Evento::evento(evento));
+                    log::debug!("Parse Evento OK");
                     return Ok(evento_json);
                 }
 
                 b"procEventoNFe" => {
                     let evento: TProcEvento = parse_procEventoNFe(&mut reader)?;
                     evento_json.eventos.push(Evento::procEventoNFe(evento));
+                    return Ok(evento_json);
+                }
+
+                b"envEvento" => {
+                    let eventos: Vec<Evento> = parse_envEvento(&mut reader)?;
+                    evento_json.eventos = eventos;
+                    return Ok(evento_json);   
+                }
+
+                b"retEnvEvento" => {
+                    let eventos: Vec<Evento> = parse_retEnvEvento(&mut reader)?;
+                    evento_json.eventos = eventos;
+                    return Ok(evento_json);
                 }
 
                 tag => {
@@ -112,6 +128,8 @@ pub fn parse_evento_nfe(xml: Bytes) -> Result<EventoJson, Box<dyn Error>> {
                     return Err(Box::new(ParseError::CampoDesconhecido(tag)));
                 }
             },
+
+            Event::End(_) => (),
 
             Event::Eof => {
                 return Err(Box::new(ParseError::Xml(
@@ -135,7 +153,7 @@ fn parse_evento(reader: &mut XmlReader) -> Result<TEvento, Box<dyn Error>> {
                     //Ignora para não tentar ler complexType com read_text
                     b"infEvento" => evento.Id = get_tag_attribute(&e, b"Id")?,
                     b"detEvento" => (),
-                    b"Signature" => (),
+                    //b"Signature" => (),
 
                     name => {
                         let txt: String = read_text(reader, &e)?;
@@ -226,6 +244,46 @@ fn parse_retEvento(reader: &mut XmlReader) -> Result<TRetEvento, Box<dyn Error>>
             }
             Event::End(e) if e.name().as_ref() == b"infEvento" => return Ok(ret),
             Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("infEvento".to_string()))),
+
+            _ => (),
+        }
+    }
+}
+
+
+fn parse_envEvento(reader: &mut XmlReader) -> Result<Vec<Evento>, Box<dyn Error>> {
+    let mut eventos: Vec<Evento> = Vec::with_capacity(20);
+
+    loop {
+        match reader.read_event()? {
+            Event::Start(e) => {
+                match e.name().as_ref() {
+                    b"evento" => eventos.push(Evento::evento(parse_evento(reader)?)),
+                    _ => ()
+                }
+            }
+            Event::End(e) if e.name().as_ref() == b"envEvento" => return Ok(eventos),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("envEvento".to_string()))),
+
+            _ => (),
+        }
+    }
+}
+
+
+fn parse_retEnvEvento(reader: &mut XmlReader) -> Result<Vec<Evento>, Box<dyn Error>> {
+    let mut eventos: Vec<Evento> = Vec::with_capacity(20);
+
+    loop {
+        match reader.read_event()? {
+            Event::Start(e) => {
+                match e.name().as_ref() {
+                    b"retEvento" => eventos.push(Evento::retEnvEvento(parse_retEvento(reader)?)),
+                    _ => ()
+                }
+            }
+            Event::End(e) if e.name().as_ref() == b"retEnvEvento" => return Ok(eventos),
+            Event::Eof => return Err(Box::new(ParseError::UnexpectedEof("retEnvEvento".to_string()))),
 
             _ => (),
         }

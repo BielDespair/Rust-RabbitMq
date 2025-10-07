@@ -21,7 +21,7 @@ async fn main() {
 
     //let file: Bytes = minio_client::download_object("NFCe33250627708310000111650010006827679001864260.xml", &variables.bucket_name).await.expect("Failed");
 
-    let file: Bytes = Bytes::from(fs::read("./data/evento.xml").unwrap());
+    let file: Bytes = Bytes::from(fs::read("./data/retEnvEvento.xml").unwrap());
 
     let start = Instant::now();
     let json = nfe_parser::parse_xml(file, 6, 9);

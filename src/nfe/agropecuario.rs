@@ -3,9 +3,8 @@ use std::error::Error;
 
 use quick_xml::{
     Reader,
-    events::{BytesStart, Event},
+    events::{Event},
 };
-use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::nfe::common::{ParseError, read_text};
