@@ -42,7 +42,7 @@ fn get_var(var: &str) -> String {
 }
 
 pub fn initialize_variables() -> RabbitVariables {
-    let n_channels: u8 = match get_var("NUM_CHANNELS").parse() {
+    let n_channels: u8 = match get_var("RABBITMQ_NUM_CHANNELS").parse() {
         Ok(n) => {
             if n > 20 {
                 panic!("Number of channels cannot exceed 20!")
@@ -52,22 +52,22 @@ pub fn initialize_variables() -> RabbitVariables {
         Err(e) => panic!("Invalid number of channels: {}", e)
     };
 
-    let port: u16 = match get_var("RABBIT_PORT").parse() {
+    let port: u16 = match get_var("RABBITMQ_PORT").parse() {
         Ok(p) => p,
         Err(e) => panic!("Invalid port: {}", e)
     };
 
     RabbitVariables {
-        host: get_var("RABBIT_HOST"),
+        host: get_var("RABBITMQ_HOST"),
         port: port,
-        user: get_var("RABBIT_USER"),
-        pwd: get_var("RABBIT_PWD"),
+        user: get_var("RABBITMQ_USER"),
+        pwd: get_var("RABBITMQ_PASSWORD"),
         
-        consume_queue: get_var("CONSUME_QUEUE"),        
-        publish_queue: get_var("PUBLISH_QUEUE"),
+        consume_queue: get_var("RABBITMQ_CONSUME_QUEUE"),        
+        publish_queue: get_var("RABBITMQ_PUBLISH_QUEUE"),
 
-        exchange: get_var("EXCHANGE"),
-        routing_key: get_var("ROUTING_KEY"),
+        exchange: get_var("RABBITMQ_EXCHANGE"),
+        routing_key: get_var("RABBITMQ_ROUTING_KEY"),
 
         num_channels: n_channels,
     }

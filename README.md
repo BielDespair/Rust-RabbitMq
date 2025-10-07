@@ -92,7 +92,6 @@ As seguintes variáveis de ambiente são necessárias para a execução do servi
 | `RABBITMQ_PORT` | Porta do servidor RabbitMQ. | `5672` |
 | `RABBITMQ_USER` | Usuário de acesso ao RabbitMQ. | `guest` |
 | `RABBITMQ_PASSWORD`| Senha do usuário. | `guest` |
-| `RABBITMQ_VHOST` | Virtual host a ser utilizado. | `/` |
 | `RABBITMQ_EXCHANGE`| Nome do exchange a ser utilizado. | `nfe_exchange` |
 | `RABBITMQ_CONSUME_QUEUE`| Nome da fila de onde as mensagens serão consumidas. | `xml_queue` |
 | `RABBITMQ_PUBLISH_QUEUE`| Nome da fila onde os resultados JSON serão publicados. | `json_queue` |
