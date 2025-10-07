@@ -3,6 +3,9 @@ target
 **/target
 
 data/**
+modelos/**
+
+.vscode/**
 
 # Ignorar arquivos de logs
 *.log
