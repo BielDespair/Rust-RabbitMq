@@ -55,8 +55,8 @@ A variável `RABBITMQ_NUM_CHANNELS` define quantos canais de consumo simultâneo
 
 ```bash
 # Clone o repositório
-git clone git@bitbucket.org:fgfconsult/simplex-consumidor-xml.git
-cd simplex-consumidor-xml
+git clone https://github.com/BielDespair/Rust-RabbitMq.git
+cd Rust-RabbitMq
 
 # Compile e execute em modo de desenvolvimento
 cargo run
@@ -69,8 +69,8 @@ cargo run --release
 O projeto inclui um `Dockerfile` com as configurações necessárias para executar um container.
 
 ```bash
-docker build -t simplex-consumidor-xml .
-docker run --rm --env-file .env simplex-consumidor-xml
+docker build -t rust-rabbitmq .
+docker run --rm --env-file .env rust-rabbitmq
 
 ```
 
