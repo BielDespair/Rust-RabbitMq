@@ -99,7 +99,3 @@ As seguintes variáveis de ambiente são necessárias para a execução do servi
 | `RABBITMQ_NUM_CHANNELS`| Número de canais de consumo a serem abertos. | `10` |
 
 
-Este projeto é atualmente mantido por:
-
-**Gabriel Alves Leonel**  
-gabrielleonel@ctributaria.com.br
